@@ -416,32 +416,93 @@
     toastTimer = setTimeout(()=> statusToast.classList.remove('show'), 1100);
   }
 
+  // ---- Storage layer ----
+  // Some browsers/modes (Safari private browsing, some in-app webviews,
+  // storage quota exceeded, browser privacy settings) make localStorage
+  // reads/writes throw instead of silently no-op. We detect that once,
+  // fall back to an in-memory store for the session so data isn't lost
+  // mid-use, and surface *why* it failed instead of a generic message.
+  const memoryFallback = {};
+  let storageMode = null; // 'local' | 'memory'
+  let storageErrorReason = '';
+
+  function describeStorageError(e){
+    if(!e) return 'unknown error';
+    if(e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') return 'storage quota exceeded';
+    if(e.name === 'SecurityError') return 'storage blocked by browser/privacy settings';
+    return e.message || e.name || 'unknown error';
+  }
+
+  function detectStorageMode(){
+    if(storageMode) return storageMode;
+    try{
+      const testKey = '__storage_test__';
+      localStorage.setItem(testKey, '1');
+      localStorage.removeItem(testKey);
+      storageMode = 'local';
+    }catch(e){
+      storageMode = 'memory';
+      storageErrorReason = describeStorageError(e);
+      toast('storage unavailable: ' + storageErrorReason);
+    }
+    return storageMode;
+  }
+
   async function loadTasks(dateObj){
     const key = 'tasks:' + fmtKey(dateObj);
+    const mode = detectStorageMode();
+    if(mode === 'memory'){
+      const raw = memoryFallback[key];
+      return raw ? JSON.parse(raw) : [];
+    }
     try{
       const raw = localStorage.getItem(key);
       return raw ? JSON.parse(raw) : [];
     }catch(e){
-      return [];
+      // A read failed even though our earlier probe succeeded (e.g. quota
+      // hit mid-session) — fall back to memory from here on.
+      storageMode = 'memory';
+      storageErrorReason = describeStorageError(e);
+      const raw = memoryFallback[key];
+      return raw ? JSON.parse(raw) : [];
     }
   }
   async function saveTasks(dateObj, tasks){
     const key = 'tasks:' + fmtKey(dateObj);
+    const mode = detectStorageMode();
+    if(mode === 'memory'){
+      memoryFallback[key] = JSON.stringify(tasks);
+      toast('saved (session only — ' + storageErrorReason + ')');
+      return;
+    }
     try{
       localStorage.setItem(key, JSON.stringify(tasks));
       toast('saved');
     }catch(e){
-      toast('save failed');
+      storageMode = 'memory';
+      storageErrorReason = describeStorageError(e);
+      memoryFallback[key] = JSON.stringify(tasks);
+      toast('saved (session only — ' + storageErrorReason + ')');
     }
   }
   let hintShown = true;
   async function checkSwipeHint(){
+    const mode = detectStorageMode();
+    if(mode === 'memory'){
+      hintShown = memoryFallback['hint:swipeSeen'] === '1';
+      return;
+    }
     try{
       hintShown = localStorage.getItem('hint:swipeSeen') === '1';
     }catch(e){ hintShown = false; }
   }
   async function markHintShown(){
     hintShown = true;
+    const mode = detectStorageMode();
+    if(mode === 'memory'){
+      memoryFallback['hint:swipeSeen'] = '1';
+      return;
+    }
     try{ localStorage.setItem('hint:swipeSeen', '1'); }catch(e){}
   }
 
