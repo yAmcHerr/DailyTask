@@ -751,7 +751,7 @@
   };
   let fbApp = null, fbAuth = null, fbDb = null, fbReady = false;
   try{
-    if(firebaseConfig.apiKey !==  "AIzaSyBxkt_ct7ehiFdMjAZJ6rdYNLILqrrc1q4"){
+    if(firebaseConfig.apiKey){
       fbApp = firebase.initializeApp(firebaseConfig);
       fbAuth = firebase.auth();
       fbDb = firebase.firestore();
