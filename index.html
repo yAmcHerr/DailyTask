@@ -836,12 +836,24 @@
 
   function localKey(dateObj){ return 'tasks:' + fmtKey(dateObj); }
 
+  // A stalled network request should never hang the UI forever — race it
+  // against a timeout and fall back to the local copy if Firestore doesn't
+  // answer in time (common right after a fresh app launch).
+  function withTimeout(promise, ms){
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
+    ]);
+  }
+
   async function loadTasks(dateObj){
     const key = localKey(dateObj);
     if(currentUser && fbDb){
       try{
-        const doc = await fbDb.collection('users').doc(currentUser.uid)
-          .collection('tasks').doc(fmtKey(dateObj)).get();
+        const doc = await withTimeout(
+          fbDb.collection('users').doc(currentUser.uid).collection('tasks').doc(fmtKey(dateObj)).get(),
+          6000
+        );
         const tasks = doc.exists ? (doc.data().items || []) : [];
         localStorage.setItem(key, JSON.stringify(tasks)); // keep local cache warm
         return tasks;
@@ -863,8 +875,10 @@
     }catch(e){}
     if(currentUser && fbDb){
       try{
-        await fbDb.collection('users').doc(currentUser.uid)
-          .collection('tasks').doc(fmtKey(dateObj)).set({ items: tasks });
+        await withTimeout(
+          fbDb.collection('users').doc(currentUser.uid).collection('tasks').doc(fmtKey(dateObj)).set({ items: tasks }),
+          6000
+        );
         toast('synced');
         return;
       }catch(e){
@@ -876,6 +890,8 @@
   }
 
   async function migrateLocalTasksToAccount(uid){
+    const flagKey = 'migrated:' + uid;
+    if(localStorage.getItem(flagKey) === '1') return; // already done — never repeat this on every load
     const keys = Object.keys(localStorage).filter(k => k.startsWith('tasks:'));
     for(const key of keys){
       const dateKey = key.slice('tasks:'.length);
@@ -884,12 +900,13 @@
         const tasks = raw ? JSON.parse(raw) : [];
         if(!tasks.length) continue;
         const ref = fbDb.collection('users').doc(uid).collection('tasks').doc(dateKey);
-        const existing = await ref.get();
+        const existing = await withTimeout(ref.get(), 6000);
         if(!existing.exists){
-          await ref.set({ items: tasks });
+          await withTimeout(ref.set({ items: tasks }), 6000);
         }
       }catch(e){ /* skip on error, non-fatal */ }
     }
+    localStorage.setItem(flagKey, '1');
   }
 
   function attachSwipe(contentEl, deleteZoneEl, onDelete){
@@ -1423,10 +1440,10 @@
         authSignedOutView.style.display = 'none';
         authSignedInView.style.display = 'block';
         authEmailLabel.textContent = user.email || 'Signed in';
-        await migrateLocalTasksToAccount(user.uid);
-        await loadAppearanceForUser(user.uid);
         refreshMenuBtnDot();
-        await refresh();
+        refresh(); // show tasks immediately — don't wait on migration/appearance
+        migrateLocalTasksToAccount(user.uid).catch(()=>{});
+        loadAppearanceForUser(user.uid).catch(()=>{});
       } else {
         accountBtn.classList.remove('signed-in');
         syncDot.classList.remove('show');
@@ -1495,7 +1512,7 @@
   async function loadAppearanceForUser(uid){
     if(!fbDb) return;
     try{
-      const doc = await fbDb.collection('users').doc(uid).collection('settings').doc('appearance').get();
+      const doc = await withTimeout(fbDb.collection('users').doc(uid).collection('settings').doc('appearance').get(), 6000);
       if(doc.exists){
         const data = doc.data();
         if(data.custom) customVars = { ...customVars, ...data.custom };
