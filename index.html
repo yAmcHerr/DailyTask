@@ -204,6 +204,57 @@
     color: var(--danger); border-radius: 8px; padding: 6px 10px; font-size: 12.5px;
   }
   .modal-note{ font-size: 11.5px; color: var(--text-faint); margin-top: 12px; line-height: 1.5; }
+  .sync-toggle-row{
+    display:flex; align-items:center; justify-content: space-between;
+    gap: 12px;
+    padding: 2px 2px 14px;
+  }
+  .sync-toggle-label{ display:flex; flex-direction:column; font-size: 14px; }
+  .sync-toggle-sub{ font-size: 11.5px; color: var(--text-faint); margin-top: 2px; }
+  .switch{
+    width: 42px; height: 25px;
+    border-radius: 999px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    position: relative;
+    flex: 0 0 auto;
+    transition: background .15s;
+  }
+  .switch .switch-knob{
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 19px; height: 19px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: transform .18s var(--ease), background .15s;
+  }
+  .switch.on{ background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; }
+  .switch.on .switch-knob{ transform: translateX(17px); background: #0E1013; }
+  .modal-secondary-btn{
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    border-radius: 12px;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    display:flex; align-items:center; justify-content:center; gap: 8px;
+    transition: transform .12s var(--ease), background .15s;
+  }
+  .modal-secondary-btn:active{ transform: scale(0.97); background: var(--surface); }
+  .modal-secondary-btn:disabled{ opacity: 0.55; }
+  .modal-secondary-btn .spin{
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    border: 2px solid var(--border-strong);
+    border-top-color: var(--text-dim);
+    animation: spin 0.7s linear infinite;
+    display: none;
+    flex: 0 0 auto;
+  }
+  .modal-secondary-btn.syncing .spin{ display:inline-block; }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
 
   /* Date row / accessible day nav */
   .date-row{
@@ -938,6 +989,17 @@
           <span id="authEmailLabel"></span>
           <button id="authSignOutBtn">Sign out</button>
         </div>
+        <div class="sync-toggle-row">
+          <span class="sync-toggle-label">Sync
+            <span class="sync-toggle-sub" id="syncToggleSub">Tasks &amp; appearance sync automatically</span>
+          </span>
+          <button type="button" class="switch on" id="syncToggleBtn" role="switch" aria-checked="true" aria-label="Toggle automatic sync"><span class="switch-knob"></span></button>
+        </div>
+        <button type="button" class="modal-secondary-btn" id="forceSyncBtn">
+          <span class="spin"></span>
+          <span id="forceSyncLabel">Force sync now</span>
+        </button>
+        <div class="modal-note" id="syncStatusNote">Pushes everything on this device to your account and pulls down anything new — works even while sync is paused.</div>
       </div>
     </div>
   </div>
@@ -1065,6 +1127,19 @@
 
   let currentUser = null; // set by onAuthStateChanged below
 
+  // Sync can be paused independently of being signed in, so a signed-in
+  // user can keep working locally-only without losing their account.
+  const SYNC_ENABLED_KEY = 'app:syncEnabled';
+  let syncEnabled = localStorage.getItem(SYNC_ENABLED_KEY) !== '0';
+  function syncActive(){ return !!(currentUser && fbDb && syncEnabled); }
+
+  // Short-lived in-memory cache of per-day Firestore reads. This is what
+  // makes the carry-over check fast: refreshCarryIndicator() and
+  // openCarryModal() both need the same ~14 days of data, so the second
+  // call reuses the first call's reads instead of hitting the network again.
+  const taskCache = new Map(); // dateKey -> { tasks, ts }
+  const TASK_CACHE_TTL = 20000;
+
   function localKey(dateObj){ return 'tasks:' + fmtKey(dateObj); }
 
   // A stalled network request should never hang the UI forever — race it
@@ -1077,19 +1152,26 @@
     ]);
   }
 
-  async function loadTasks(dateObj){
+  async function loadTasks(dateObj, opts){
+    const opt = opts || {};
     const key = localKey(dateObj);
-    if(currentUser && fbDb){
+    const dateKey = fmtKey(dateObj);
+    if(fbDb && currentUser && (syncActive() || opt.force)){
+      const cached = taskCache.get(dateKey);
+      if(!opt.force && cached && (Date.now() - cached.ts) < TASK_CACHE_TTL){
+        return cached.tasks;
+      }
       try{
         const doc = await withTimeout(
-          fbDb.collection('users').doc(currentUser.uid).collection('tasks').doc(fmtKey(dateObj)).get(),
-          6000
+          fbDb.collection('users').doc(currentUser.uid).collection('tasks').doc(dateKey).get(),
+          4000
         );
         const tasks = doc.exists ? (doc.data().items || []) : [];
         localStorage.setItem(key, JSON.stringify(tasks)); // keep local cache warm
+        taskCache.set(dateKey, { tasks, ts: Date.now() });
         return tasks;
       }catch(e){
-        toast('offline — showing local copy');
+        if(!opt.silent) toast('offline — showing local copy');
       }
     }
     try{
@@ -1099,44 +1181,50 @@
       return [];
     }
   }
-  async function saveTasks(dateObj, tasks){
+  async function saveTasks(dateObj, tasks, opts){
+    const opt = opts || {};
     const key = localKey(dateObj);
+    const dateKey = fmtKey(dateObj);
     try{
       localStorage.setItem(key, JSON.stringify(tasks));
     }catch(e){}
-    if(currentUser && fbDb){
+    taskCache.set(dateKey, { tasks, ts: Date.now() }); // keep cache warm optimistically
+    if(fbDb && currentUser && (syncActive() || opt.force)){
       try{
         await withTimeout(
-          fbDb.collection('users').doc(currentUser.uid).collection('tasks').doc(fmtKey(dateObj)).set({ items: tasks }),
+          fbDb.collection('users').doc(currentUser.uid).collection('tasks').doc(dateKey).set({ items: tasks }),
           6000
         );
-        toast('synced');
+        if(!opt.silent) toast('synced');
         return;
       }catch(e){
-        toast('saved locally — sync failed');
+        if(!opt.silent) toast('saved locally — sync failed');
         return;
       }
     }
-    toast('saved');
+    if(!opt.silent) toast(currentUser && !syncEnabled ? 'saved locally — sync paused' : 'saved');
   }
 
   async function migrateLocalTasksToAccount(uid){
     const flagKey = 'migrated:' + uid;
     if(localStorage.getItem(flagKey) === '1') return; // already done — never repeat this on every load
     const keys = Object.keys(localStorage).filter(k => k.startsWith('tasks:'));
-    for(const key of keys){
+    // Run the per-day migration checks in parallel rather than one at a
+    // time — this only matters the first time a device signs in, but no
+    // reason to make it any slower than it needs to be.
+    await Promise.all(keys.map(async (key) => {
       const dateKey = key.slice('tasks:'.length);
       try{
         const raw = localStorage.getItem(key);
         const tasks = raw ? JSON.parse(raw) : [];
-        if(!tasks.length) continue;
+        if(!tasks.length) return;
         const ref = fbDb.collection('users').doc(uid).collection('tasks').doc(dateKey);
-        const existing = await withTimeout(ref.get(), 6000);
+        const existing = await withTimeout(ref.get(), 5000);
         if(!existing.exists){
-          await withTimeout(ref.set({ items: tasks }), 6000);
+          await withTimeout(ref.set({ items: tasks }), 5000);
         }
       }catch(e){ /* skip on error, non-fatal */ }
-    }
+    }));
     localStorage.setItem(flagKey, '1');
   }
 
@@ -1317,17 +1405,21 @@
   const CARRY_LOOKBACK_DAYS = 14;
 
   async function getCarryCandidates(){
-    const days = [];
+    // Fetch all lookback days in parallel (and through the shared task
+    // cache) instead of one-by-one — this is the difference between ~14
+    // sequential round trips and a single round trip's worth of latency.
+    const dates = [];
     for(let i = 1; i <= CARRY_LOOKBACK_DAYS; i++){
       const d = new Date(current);
       d.setDate(d.getDate() - i);
-      const tasks = await loadTasks(d);
-      const unfinished = tasks.filter(t => !t.done);
-      if(unfinished.length){
-        days.push({ date: new Date(d), key: fmtKey(d), tasks: unfinished });
-      }
+      dates.push(d);
     }
-    return days; // most recent first
+    const results = await Promise.all(dates.map(async (d) => {
+      const tasks = await loadTasks(d, { silent: true });
+      const unfinished = tasks.filter(t => !t.done);
+      return unfinished.length ? { date: d, key: fmtKey(d), tasks: unfinished } : null;
+    }));
+    return results.filter(Boolean); // Promise.all preserves order, so this stays most-recent-first
   }
 
   async function refreshCarryIndicator(){
@@ -1559,13 +1651,13 @@
   async function loadMonthTaskMap(year, month0){
     const { start, end } = monthKeyRange(year, month0);
     const map = {};
-    if(currentUser && fbDb){
+    if(currentUser && fbDb && syncActive()){
       try{
         const snap = await withTimeout(
           fbDb.collection('users').doc(currentUser.uid).collection('tasks')
             .orderBy(firebase.firestore.FieldPath.documentId())
             .startAt(start).endAt(end).get(),
-          6000
+          5000
         );
         snap.forEach(doc => {
           const items = doc.data().items || [];
@@ -1892,20 +1984,105 @@
     try{ await fbAuth.signOut(); }catch(e){}
   });
 
+  /* ---------- Sync on/off + force sync ---------- */
+  const syncToggleBtn = document.getElementById('syncToggleBtn');
+  const syncToggleSub = document.getElementById('syncToggleSub');
+  const forceSyncBtn = document.getElementById('forceSyncBtn');
+  const forceSyncLabel = document.getElementById('forceSyncLabel');
+  const syncStatusNote = document.getElementById('syncStatusNote');
+  const LAST_FORCE_SYNC_KEY = 'app:lastForceSyncTs';
+
+  function updateSyncToggleUI(){
+    if(syncToggleBtn){
+      syncToggleBtn.classList.toggle('on', syncEnabled);
+      syncToggleBtn.setAttribute('aria-checked', String(syncEnabled));
+    }
+    if(syncToggleSub) syncToggleSub.textContent = syncEnabled
+      ? 'Tasks & appearance sync automatically'
+      : 'Sync paused — changes stay on this device';
+    if(accountMenuSub && currentUser){
+      accountMenuSub.textContent = syncEnabled ? (currentUser.email || 'Signed in') : 'Sync paused';
+    }
+    if(syncDot) syncDot.classList.toggle('show', !!currentUser && syncEnabled);
+    refreshMenuBtnDot();
+  }
+  function updateLastSyncNote(){
+    if(!syncStatusNote) return;
+    const ts = localStorage.getItem(LAST_FORCE_SYNC_KEY);
+    syncStatusNote.textContent = ts
+      ? 'Last force synced ' + new Date(Number(ts)).toLocaleTimeString()
+      : 'Pushes everything on this device to your account and pulls down anything new — works even while sync is paused.';
+  }
+
+  if(syncToggleBtn){
+    syncToggleBtn.addEventListener('click', async () => {
+      syncEnabled = !syncEnabled;
+      try{ localStorage.setItem(SYNC_ENABLED_KEY, syncEnabled ? '1' : '0'); }catch(e){}
+      updateSyncToggleUI();
+      if(syncEnabled && currentUser){
+        taskCache.clear(); // stop trusting reads made while sync was paused
+        toast('sync resumed');
+        await refresh();
+        migrateLocalTasksToAccount(currentUser.uid).catch(()=>{});
+        loadAppearanceForUser(currentUser.uid).catch(()=>{});
+      } else {
+        toast('sync paused');
+      }
+    });
+  }
+
+  if(forceSyncBtn){
+    forceSyncBtn.addEventListener('click', async () => {
+      if(!currentUser || !fbDb){ toast('Sign in first to sync'); return; }
+      forceSyncBtn.disabled = true;
+      forceSyncBtn.classList.add('syncing');
+      if(forceSyncLabel) forceSyncLabel.textContent = 'Syncing…';
+      try{
+        // Push every locally-known day up to the account, in parallel, then
+        // pull tasks/appearance back down — bypasses the sync-enabled flag
+        // for this one manual pass via { force: true }.
+        const keys = Object.keys(localStorage).filter(k => k.startsWith('tasks:'));
+        await Promise.all(keys.map(async (storeKey) => {
+          const dateKey = storeKey.slice('tasks:'.length);
+          let tasks = [];
+          try{ tasks = JSON.parse(localStorage.getItem(storeKey)) || []; }catch(e){}
+          await withTimeout(
+            fbDb.collection('users').doc(currentUser.uid).collection('tasks').doc(dateKey).set({ items: tasks }),
+            8000
+          );
+          taskCache.set(dateKey, { tasks, ts: Date.now() });
+        }));
+        await saveAppearance(true);
+        await loadAppearanceForUser(currentUser.uid);
+        taskCache.clear();
+        await refresh();
+        try{ localStorage.setItem(LAST_FORCE_SYNC_KEY, String(Date.now())); }catch(e){}
+        toast('force synced');
+      }catch(e){
+        toast('force sync failed');
+      }
+      forceSyncBtn.disabled = false;
+      forceSyncBtn.classList.remove('syncing');
+      if(forceSyncLabel) forceSyncLabel.textContent = 'Force sync now';
+      updateLastSyncNote();
+    });
+  }
+
   if(fbReady){
     fbAuth.onAuthStateChanged(async (user) => {
       currentUser = user;
       if(user){
         accountBtn.classList.add('signed-in');
-        syncDot.classList.add('show');
-        if(accountMenuSub) accountMenuSub.textContent = user.email || 'Signed in';
         authSignedOutView.style.display = 'none';
         authSignedInView.style.display = 'block';
         authEmailLabel.textContent = user.email || 'Signed in';
-        refreshMenuBtnDot();
+        updateSyncToggleUI();
+        updateLastSyncNote();
         refresh(); // show tasks immediately — don't wait on migration/appearance
-        migrateLocalTasksToAccount(user.uid).catch(()=>{});
-        loadAppearanceForUser(user.uid).catch(()=>{});
+        if(syncEnabled){
+          migrateLocalTasksToAccount(user.uid).catch(()=>{});
+          loadAppearanceForUser(user.uid).catch(()=>{});
+        }
       } else {
         accountBtn.classList.remove('signed-in');
         syncDot.classList.remove('show');
@@ -1953,12 +2130,15 @@
   function saveAppearanceLocal(){
     try{ localStorage.setItem(THEME_KEY, JSON.stringify({ id: activeThemeId, custom: customVars })); }catch(e){}
   }
-  async function saveAppearance(){
+  async function saveAppearance(force){
     saveAppearanceLocal();
-    if(currentUser && fbDb){
+    if(currentUser && fbDb && (syncActive() || force)){
       try{
-        await fbDb.collection('users').doc(currentUser.uid).collection('settings').doc('appearance')
-          .set({ id: activeThemeId, custom: customVars });
+        await withTimeout(
+          fbDb.collection('users').doc(currentUser.uid).collection('settings').doc('appearance')
+            .set({ id: activeThemeId, custom: customVars }),
+          4000
+        );
       }catch(e){ /* non-fatal, local copy already saved */ }
     }
   }
@@ -1974,7 +2154,7 @@
   async function loadAppearanceForUser(uid){
     if(!fbDb) return;
     try{
-      const doc = await withTimeout(fbDb.collection('users').doc(uid).collection('settings').doc('appearance').get(), 6000);
+      const doc = await withTimeout(fbDb.collection('users').doc(uid).collection('settings').doc('appearance').get(), 4000);
       if(doc.exists){
         const data = doc.data();
         if(data.custom) customVars = { ...customVars, ...data.custom };
