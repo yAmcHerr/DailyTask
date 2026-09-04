@@ -1,4 +1,4 @@
-const CACHE_NAME = 'daily-work-log-v6';
+const CACHE_NAME = 'todo-tracker-v6';
 const APP_SHELL = ['./', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
