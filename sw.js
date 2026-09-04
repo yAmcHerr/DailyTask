@@ -1,4 +1,4 @@
-const CACHE_NAME = 'daily-work-log-v2';
+const CACHE_NAME = 'daily-work-log-v6';
 const APP_SHELL = ['./', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -26,6 +26,7 @@ function isHtmlRequest(request) {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  if (new URL(event.request.url).origin !== self.location.origin) return; // let cross-origin (Firebase, fonts) pass through untouched
 
   if (isHtmlRequest(event.request)) {
     event.respondWith(
@@ -51,6 +52,18 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => cached);
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow('./index.html');
     })
   );
 });
