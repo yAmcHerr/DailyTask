@@ -1187,6 +1187,7 @@
       sorted.forEach((t, idx) => {
         const row = document.createElement('div');
         row.className = 'task-row';
+        row.dataset.id = t.id;
 
         const deleteZone = document.createElement('div');
         deleteZone.className = 'delete-zone';
@@ -1272,7 +1273,21 @@
 
   async function toggleTask(id){
     currentTasks = currentTasks.map(t => t.id === id ? {...t, done: !t.done} : t);
-    render(currentTasks);
+    // Toggling never changes sort order (sorted by time, not done-state), so
+    // update just this row's DOM instead of tearing down and rebuilding the
+    // whole list — noticeably cheaper on longer task lists.
+    const row = taskListEl.querySelector(`.task-row[data-id="${CSS.escape(id)}"]`);
+    const updated = currentTasks.find(t => t.id === id);
+    if(row && updated){
+      const stamp = row.querySelector('.stamp');
+      const text = row.querySelector('.task-text');
+      stamp.classList.toggle('done', updated.done);
+      stamp.setAttribute('aria-label', updated.done ? 'Mark not done' : 'Mark done');
+      text.classList.toggle('done', updated.done);
+      animateProgress(currentTasks);
+    } else {
+      render(currentTasks); // fallback, shouldn't normally happen
+    }
     await saveTasks(current, currentTasks);
   }
   async function deleteTask(id){
@@ -1799,7 +1814,10 @@
     const now = new Date();
     const dateKey = fmtKey(now);
     const nowStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-    const todaysTasks = await loadTasks(now);
+    // Local storage is already kept in sync by saveTasks() on every change, so
+    // this recurring check doesn't need a network round-trip every 30s.
+    let todaysTasks = [];
+    try{ todaysTasks = JSON.parse(localStorage.getItem(localKey(now)) || '[]'); }catch(e){}
     const notified = getNotifiedIds(dateKey);
     todaysTasks.forEach(t => {
       if(t.done || !t.time) return;
