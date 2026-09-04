@@ -1,7 +1,7 @@
 {
-  "name": "Daily Work Log",
-  "short_name": "Work Log",
-  "description": "A modern tracker for daily tasks and work.",
+  "name": "To-Do Tracker",
+  "short_name": "To-Do Tracker",
+  "description": "A modern tracker for daily to-dos.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
