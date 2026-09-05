@@ -177,6 +177,14 @@
     margin-bottom: 4px;
   }
   .modal-sub{ font-size: 13px; color: var(--text-dim); margin-bottom: 18px; }
+  .about-icon{ display:flex; justify-content:center; margin-bottom: 14px; }
+  .about-version{
+    text-align:center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
   .modal-card input[type=email], .modal-card input[type=password]{
     width: 100%;
     background: var(--surface-2);
@@ -350,7 +358,7 @@
   .menu-item-dot.show{ display: block; }
   .menu-item-chevron{ flex: 0 0 auto; color: var(--text-faint); }
 
-  /* Appearance / theme picker */
+  /* Themes (appearance) picker */
   .theme-grid{
     display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
     margin: 6px 0 16px;
@@ -939,12 +947,17 @@
         </button>
         <button class="menu-item" id="appearanceBtn">
           <span class="menu-item-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.3"/><path d="M8 2.5v11M2.5 8h11" stroke="currentColor" stroke-width="1" opacity="0.5"/></svg></span>
-          <span class="menu-item-label">Appearance<div class="menu-item-sub" id="appearanceMenuSub">Default</div></span>
+          <span class="menu-item-label">Themes<div class="menu-item-sub" id="appearanceMenuSub">Default</div></span>
           <span class="menu-item-chevron">›</span>
         </button>
         <button class="menu-item" id="exportBtn">
           <span class="menu-item-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0L5 7m3 3l3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12.5v1a1 1 0 001 1h8a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span>
           <span class="menu-item-label">Export tasks</span>
+          <span class="menu-item-chevron">›</span>
+        </button>
+        <button class="menu-item" id="aboutBtn">
+          <span class="menu-item-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.8" stroke="currentColor" stroke-width="1.3"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="5.1" r="0.9" fill="currentColor"/></svg></span>
+          <span class="menu-item-label">About</span>
           <span class="menu-item-chevron">›</span>
         </button>
       </div>
@@ -954,7 +967,7 @@
   <div class="modal-backdrop" id="appearanceBackdrop">
     <div class="modal-card">
       <button class="modal-close" id="appearanceClose" aria-label="Close">✕</button>
-      <div class="modal-title">Appearance</div>
+      <div class="modal-title">Themes</div>
       <div class="modal-sub">Pick a look, or build your own. Syncs to your account when signed in.</div>
       <div class="theme-grid" id="themeGrid"></div>
       <div class="custom-theme-panel" id="customThemePanel">
@@ -964,6 +977,18 @@
         <div class="color-field-row"><label>Accent</label><input type="color" id="customAccent"></div>
         <div class="color-field-row" style="border-bottom:none;"><label>Accent 2</label><input type="color" id="customAccent2"></div>
       </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="aboutBackdrop">
+    <div class="modal-card">
+      <button class="modal-close" id="aboutClose" aria-label="Close">✕</button>
+      <div class="about-icon">
+        <svg width="40" height="40" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="var(--bg)"/><circle cx="256" cy="256" r="150" fill="none" stroke="var(--accent)" stroke-width="18"/><path d="M180 262 L232 316 L340 196" fill="none" stroke="var(--accent-2)" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="modal-title" style="text-align:center;">To-Do Tracker</div>
+      <div class="about-version" id="aboutVersion">Version —</div>
+      <div class="modal-sub" style="text-align:center;">Made by <strong>yAmcHer</strong></div>
     </div>
   </div>
 
@@ -1030,14 +1055,14 @@
 
       <div id="authSignedInView" style="display:none;">
         <div class="modal-title">Synced</div>
-        <div class="modal-sub">Your tasks and appearance settings are saved to your account and will sync to any device you sign into.</div>
+        <div class="modal-sub">Your tasks and theme settings are saved to your account and will sync to any device you sign into.</div>
         <div class="modal-account-row">
           <span id="authEmailLabel"></span>
           <button id="authSignOutBtn">Sign out</button>
         </div>
         <div class="sync-toggle-row">
           <span class="sync-toggle-label">Sync
-            <span class="sync-toggle-sub" id="syncToggleSub">Tasks &amp; appearance sync automatically</span>
+            <span class="sync-toggle-sub" id="syncToggleSub">Tasks &amp; themes sync automatically</span>
           </span>
           <button type="button" class="switch on" id="syncToggleBtn" role="switch" aria-checked="true" aria-label="Toggle automatic sync"><span class="switch-knob"></span></button>
         </div>
@@ -2136,7 +2161,7 @@
       syncToggleBtn.setAttribute('aria-checked', String(syncEnabled));
     }
     if(syncToggleSub) syncToggleSub.textContent = syncEnabled
-      ? 'Tasks & appearance sync automatically'
+      ? 'Tasks & themes sync automatically'
       : 'Sync paused — changes stay on this device';
     if(accountMenuSub && currentUser){
       accountMenuSub.textContent = syncEnabled ? (currentUser.email || 'Signed in') : 'Sync paused';
@@ -2237,14 +2262,28 @@
     });
   }
 
-  /* ---------- Appearance ---------- */
+  /* ---------- Themes (appearance) ---------- */
   const THEME_PRESETS = {
     default: { name: 'Default', vars: { '--bg':'#0E1013', '--surface':'#181B22', '--surface-2':'#21252E', '--text':'#F4F5F7', '--text-dim':'#8A8FA0', '--accent':'#7C6BF0', '--accent-2':'#2FD9A8' } },
     midnight: { name: 'Midnight', vars: { '--bg':'#0A0E1A', '--surface':'#131A2B', '--surface-2':'#1C2540', '--text':'#EAF0FF', '--text-dim':'#8A96BF', '--accent':'#5B8DEF', '--accent-2':'#4FD1E5' } },
     sunset: { name: 'Sunset', vars: { '--bg':'#1A0E12', '--surface':'#26151C', '--surface-2':'#331C25', '--text':'#FCEFEA', '--text-dim':'#C79A94', '--accent':'#F0755B', '--accent-2':'#F5B942' } },
     forest: { name: 'Forest', vars: { '--bg':'#0D1410', '--surface':'#15211B', '--surface-2':'#1C2C24', '--text':'#EAF5EE', '--text-dim':'#8FB39D', '--accent':'#4CAF7D', '--accent-2':'#9BD35A' } },
-    light: { name: 'Light', vars: { '--bg':'#F5F6F8', '--surface':'#FFFFFF', '--surface-2':'#EDEFF3', '--text':'#14161A', '--text-dim':'#5B6070', '--accent':'#6C5CE7', '--accent-2':'#00B894' } },
+    rose: { name: 'Rose', vars: { '--bg':'#170D14', '--surface':'#241620', '--surface-2':'#301D2B', '--text':'#FBEFF5', '--text-dim':'#C99AB3', '--accent':'#E8598B', '--accent-2':'#F2B84B' } },
     custom: { name: 'Custom', vars: null }
+  };
+  // Canonical fallback for every themable variable. applyThemeVars() always
+  // resets to this baseline before layering a preset's overrides on top, so
+  // a preset that only customizes a few colors (or the Custom picker, which
+  // only exposes 5) can never leave a stale value behind from whichever
+  // theme was active before it — this is what made Light look broken: its
+  // white-on-white borders were actually leftover dark-theme defaults that
+  // were never being reset.
+  const BASE_VARS = {
+    '--bg':'#0E1013', '--surface':'#181B22', '--surface-2':'#21252E',
+    '--border':'rgba(255,255,255,0.07)', '--border-strong':'rgba(255,255,255,0.12)',
+    '--text':'#F4F5F7', '--text-dim':'#8A8FA0', '--text-faint':'#565B68',
+    '--accent':'#7C6BF0', '--accent-2':'#2FD9A8', '--accent-dim':'#5847C7',
+    '--danger':'#EF5F79'
   };
   const THEME_KEY = 'app:theme';
   const root = document.documentElement;
@@ -2252,6 +2291,7 @@
   let customVars = { '--bg':'#0E1013', '--surface':'#181B22', '--text':'#F4F5F7', '--accent':'#7C6BF0', '--accent-2':'#2FD9A8' };
 
   function applyThemeVars(vars){
+    Object.keys(BASE_VARS).forEach(k => root.style.setProperty(k, BASE_VARS[k]));
     Object.keys(vars).forEach(k => root.style.setProperty(k, vars[k]));
   }
   function applyTheme(themeId){
@@ -2334,6 +2374,19 @@
   appearanceBtn.addEventListener('click', () => { closeMenu(); renderThemeGrid(); appearanceBackdrop.classList.add('show'); });
   appearanceClose.addEventListener('click', () => appearanceBackdrop.classList.remove('show'));
   appearanceBackdrop.addEventListener('click', (e) => { if(e.target === appearanceBackdrop) appearanceBackdrop.classList.remove('show'); });
+
+  const APP_VERSION = '2.4.5.0';
+  const aboutBtn = document.getElementById('aboutBtn');
+  const aboutBackdrop = document.getElementById('aboutBackdrop');
+  const aboutClose = document.getElementById('aboutClose');
+  const aboutVersion = document.getElementById('aboutVersion');
+  aboutBtn.addEventListener('click', () => {
+    closeMenu();
+    aboutVersion.textContent = 'Version ' + APP_VERSION;
+    aboutBackdrop.classList.add('show');
+  });
+  aboutClose.addEventListener('click', () => aboutBackdrop.classList.remove('show'));
+  aboutBackdrop.addEventListener('click', (e) => { if(e.target === aboutBackdrop) aboutBackdrop.classList.remove('show'); });
 
   const customBg = document.getElementById('customBg');
   const customSurface = document.getElementById('customSurface');
