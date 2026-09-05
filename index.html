@@ -984,7 +984,7 @@
 
       <div id="authSignedInView" style="display:none;">
         <div class="modal-title">Synced</div>
-        <div class="modal-sub">Your tasks are saved to your account and will sync to any device you sign into.</div>
+        <div class="modal-sub">Your tasks and appearance settings are saved to your account and will sync to any device you sign into.</div>
         <div class="modal-account-row">
           <span id="authEmailLabel"></span>
           <button id="authSignOutBtn">Sign out</button>
@@ -1152,10 +1152,14 @@
     ]);
   }
 
+  const writeSeq = new Map(); // dateKey -> counter, bumped synchronously on every save so
+                               // an older, still-in-flight read can never overwrite a newer write
+
   async function loadTasks(dateObj, opts){
     const opt = opts || {};
     const key = localKey(dateObj);
     const dateKey = fmtKey(dateObj);
+    const seqAtStart = writeSeq.get(dateKey) || 0;
     if(fbDb && currentUser && (syncActive() || opt.force)){
       const cached = taskCache.get(dateKey);
       if(!opt.force && cached && (Date.now() - cached.ts) < TASK_CACHE_TTL){
@@ -1167,7 +1171,18 @@
           4000
         );
         const tasks = doc.exists ? (doc.data().items || []) : [];
-        localStorage.setItem(key, JSON.stringify(tasks)); // keep local cache warm
+        const staleNow = (writeSeq.get(dateKey) || 0) !== seqAtStart;
+        if(staleNow){
+          // A newer save started while this read was in flight — that save
+          // already knows the true current state, so don't let this older
+          // result overwrite it. Return what's actually on disk right now.
+          try{ const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : []; }catch(e){ return []; }
+        }
+        // Never let an empty Firestore result blank out local data that simply
+        // hasn't been migrated up yet (e.g. right after a fresh sign-in).
+        if(tasks.length || !localStorage.getItem(key)){
+          localStorage.setItem(key, JSON.stringify(tasks));
+        }
         taskCache.set(dateKey, { tasks, ts: Date.now() });
         return tasks;
       }catch(e){
@@ -1185,6 +1200,7 @@
     const opt = opts || {};
     const key = localKey(dateObj);
     const dateKey = fmtKey(dateObj);
+    writeSeq.set(dateKey, (writeSeq.get(dateKey) || 0) + 1); // claim this as the newest write, before any await
     try{
       localStorage.setItem(key, JSON.stringify(tasks));
     }catch(e){}
@@ -1226,6 +1242,21 @@
       }catch(e){ /* skip on error, non-fatal */ }
     }));
     localStorage.setItem(flagKey, '1');
+  }
+
+  // Mirrors migrateLocalTasksToAccount for appearance: if this device
+  // customized a theme before ever signing in, and the account doesn't
+  // have an appearance saved yet, push the local one up instead of
+  // silently losing it to whatever loadAppearanceForUser pulls down next.
+  async function migrateLocalAppearanceToAccount(uid){
+    if(!fbDb) return;
+    try{
+      const ref = fbDb.collection('users').doc(uid).collection('settings').doc('appearance');
+      const existing = await withTimeout(ref.get(), 4000);
+      if(!existing.exists){
+        await withTimeout(ref.set({ id: activeThemeId, custom: customVars }), 4000);
+      }
+    }catch(e){ /* non-fatal — loadAppearanceForUser will just apply whatever is on the account */ }
   }
 
   function attachSwipe(contentEl, deleteZoneEl, onDelete){
@@ -1354,9 +1385,13 @@
     lastPct = 0;
     ringFg.style.strokeDashoffset = RING_CIRC;
     ringLabel.textContent = '0%';
+    // Kick the carry-over check off in parallel with the main day's tasks
+    // instead of waiting for the day to finish loading first — the two
+    // network calls (or the one ranged query) now overlap.
+    const carryPromise = refreshCarryIndicator();
     currentTasks = await loadTasks(current);
     render(currentTasks);
-    await refreshCarryIndicator();
+    await carryPromise;
   }
 
   async function toggleTask(id){
@@ -1405,21 +1440,61 @@
   const CARRY_LOOKBACK_DAYS = 14;
 
   async function getCarryCandidates(){
-    // Fetch all lookback days in parallel (and through the shared task
-    // cache) instead of one-by-one — this is the difference between ~14
-    // sequential round trips and a single round trip's worth of latency.
     const dates = [];
     for(let i = 1; i <= CARRY_LOOKBACK_DAYS; i++){
       const d = new Date(current);
       d.setDate(d.getDate() - i);
       dates.push(d);
     }
+
+    // When signed in and synced, pull the whole lookback window in a
+    // single ranged query instead of one request per day — this is the
+    // remaining delay: even parallel requests still pay per-request
+    // overhead, while one range query pays it once.
+    if(fbDb && currentUser && syncActive()){
+      const startKey = fmtKey(dates[dates.length - 1]);
+      const endKey = fmtKey(dates[0]);
+      const rangeCacheKey = 'carryrange:' + startKey + ':' + endKey;
+      const cachedRange = taskCache.get(rangeCacheKey);
+      let map = (cachedRange && (Date.now() - cachedRange.ts) < TASK_CACHE_TTL) ? cachedRange.map : null;
+      if(!map){
+        try{
+          const snap = await withTimeout(
+            fbDb.collection('users').doc(currentUser.uid).collection('tasks')
+              .orderBy(firebase.firestore.FieldPath.documentId())
+              .startAt(startKey).endAt(endKey).get(),
+            4000
+          );
+          map = {};
+          snap.forEach(doc => {
+            const items = doc.data().items || [];
+            map[doc.id] = items;
+            taskCache.set(doc.id, { tasks: items, ts: Date.now() }); // warm per-day cache too
+            try{ localStorage.setItem('tasks:' + doc.id, JSON.stringify(items)); }catch(e){}
+          });
+          taskCache.set(rangeCacheKey, { map, ts: Date.now() });
+        }catch(e){ map = null; }
+      }
+      if(map){
+        return dates
+          .map(d => {
+            const key = fmtKey(d);
+            const unfinished = (map[key] || []).filter(t => !t.done);
+            return unfinished.length ? { date: d, key, tasks: unfinished } : null;
+          })
+          .filter(Boolean);
+      }
+      // range query failed — fall through to the per-day fallback below
+    }
+
+    // Signed out, sync paused, or the ranged query above failed: read each
+    // day in parallel (local storage is synchronous-fast either way).
     const results = await Promise.all(dates.map(async (d) => {
       const tasks = await loadTasks(d, { silent: true });
       const unfinished = tasks.filter(t => !t.done);
       return unfinished.length ? { date: d, key: fmtKey(d), tasks: unfinished } : null;
     }));
-    return results.filter(Boolean); // Promise.all preserves order, so this stays most-recent-first
+    return results.filter(Boolean);
   }
 
   async function refreshCarryIndicator(){
@@ -2024,7 +2099,9 @@
         toast('sync resumed');
         await refresh();
         migrateLocalTasksToAccount(currentUser.uid).catch(()=>{});
-        loadAppearanceForUser(currentUser.uid).catch(()=>{});
+        migrateLocalAppearanceToAccount(currentUser.uid)
+          .then(() => loadAppearanceForUser(currentUser.uid))
+          .catch(()=>{});
       } else {
         toast('sync paused');
       }
@@ -2080,8 +2157,10 @@
         updateLastSyncNote();
         refresh(); // show tasks immediately — don't wait on migration/appearance
         if(syncEnabled){
-          migrateLocalTasksToAccount(user.uid).catch(()=>{});
-          loadAppearanceForUser(user.uid).catch(()=>{});
+          migrateLocalTasksToAccount(user.uid).then(() => { taskCache.clear(); refresh(); }).catch(()=>{});
+          migrateLocalAppearanceToAccount(user.uid)
+            .then(() => loadAppearanceForUser(user.uid))
+            .catch(()=>{});
         }
       } else {
         accountBtn.classList.remove('signed-in');
