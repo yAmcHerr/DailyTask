@@ -1,4 +1,4 @@
-const CACHE_NAME = 'todo-tracker-v2.4.3.0';
+const CACHE_NAME = 'todo-tracker-v2.4.5.0';
 const APP_SHELL = ['./', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
