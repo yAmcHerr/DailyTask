@@ -43,6 +43,29 @@
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    position: relative;
+  }
+
+  /* Desktop / wide-viewport layout: a mobile-width single column stretched
+     edge-to-edge across a 1200px+ browser window looks unfinished, so above
+     720px the app becomes a framed, centered column instead — same
+     structure, just presented like a real desktop app window rather than
+     a phone screen someone forgot to constrain. */
+  @media (min-width: 720px){
+    html{ background: var(--surface-2); }
+    body{
+      max-width: 640px;
+      margin: 0 auto;
+      min-height: 100vh;
+      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      box-shadow: 0 0 90px rgba(0,0,0,0.35);
+    }
+  }
+  @media (min-width: 1080px){
+    body{ max-width: 760px; }
+    .appbar-title{ font-size: 21px; }
+    .task-text{ font-size: 16px; }
   }
   button{ font-family: inherit; cursor: pointer; }
   button:focus-visible, input:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -118,7 +141,7 @@
 
   /* Modal */
   .modal-backdrop{
-    position: fixed; inset: 0;
+    position: absolute; inset: 0;
     background: rgba(8,9,11,0.62);
     -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
@@ -761,7 +784,7 @@
   .add-bar button#addBtn:active{ transform: scale(0.9); }
 
   .status-toast{
-    position: fixed;
+    position: absolute;
     bottom: calc(86px + var(--safe-bottom));
     left: 50%;
     transform: translateX(-50%) translateY(4px);
@@ -775,11 +798,12 @@
     opacity: 0;
     pointer-events: none;
     transition: opacity .25s var(--ease), transform .25s var(--ease);
+    z-index: 60;
   }
   .status-toast.show{ opacity: 0.96; transform: translateX(-50%) translateY(0); }
 
   .export-toast{
-    position: fixed;
+    position: absolute;
     left: 16px;
     right: 16px;
     bottom: calc(86px + var(--safe-bottom));
@@ -1243,30 +1267,44 @@
     if(!opt.silent) toast(currentUser && !syncEnabled ? 'saved locally — sync paused' : 'saved');
   }
 
-  async function migrateLocalTasksToAccount(uid){
-    const flagKey = 'migrated:' + uid;
-    if(localStorage.getItem(flagKey) === '1') return; // already done — never repeat this on every load
-    const keys = Object.keys(localStorage).filter(k => k.startsWith('tasks:'));
-    // Run the per-day migration checks in parallel rather than one at a
-    // time — this only matters the first time a device signs in, but no
-    // reason to make it any slower than it needs to be.
-    await Promise.all(keys.map(async (key) => {
-      const dateKey = key.slice('tasks:'.length);
-      try{
-        const raw = localStorage.getItem(key);
-        const tasks = raw ? JSON.parse(raw) : [];
-        if(!tasks.length) return;
-        const ref = fbDb.collection('users').doc(uid).collection('tasks').doc(dateKey);
-        const existing = await withTimeout(ref.get(), 5000);
-        if(!existing.exists){
-          await withTimeout(ref.set({ items: tasks }), 5000);
-        }
-      }catch(e){ /* skip on error, non-fatal */ }
-    }));
-    localStorage.setItem(flagKey, '1');
+  // Runs every time sync goes from off to on (login, or toggling sync back on) —
+  // not just once ever. Merges by task id in both directions so neither side's
+  // edits get silently discarded: local-only tasks get pushed up, and nothing
+  // that's already in the cloud gets overwritten just because a stale local
+  // copy also happens to exist. Safe to call repeatedly; it's a no-op once
+  // both sides already agree.
+  async function mergeDateWithCloud(uid, dateKey){
+    let localTasks = [];
+    try{ localTasks = JSON.parse(localStorage.getItem('tasks:' + dateKey) || '[]'); }catch(e){}
+    const ref = fbDb.collection('users').doc(uid).collection('tasks').doc(dateKey);
+    let cloudTasks = [], existed = false;
+    try{
+      const snap = await withTimeout(ref.get(), 5000);
+      existed = snap.exists;
+      cloudTasks = snap.exists ? (snap.data().items || []) : [];
+    }catch(e){ return; } // can't reach the network — leave both sides untouched rather than risk clobbering
+    if(!localTasks.length && !cloudTasks.length) return;
+
+    const byId = new Map();
+    cloudTasks.forEach(t => byId.set(t.id, t));
+    let needsPush = !existed;
+    localTasks.forEach(t => { if(!byId.has(t.id)){ byId.set(t.id, t); needsPush = true; } });
+    const merged = Array.from(byId.values());
+
+    if(needsPush){
+      try{ await withTimeout(ref.set({ items: merged }), 5000); }catch(e){ return; }
+    }
+    localStorage.setItem('tasks:' + dateKey, JSON.stringify(merged));
+    taskCache.set(dateKey, { tasks: merged, ts: Date.now() });
+  }
+  async function mergeLocalWithAccount(uid){
+    const dateKeys = Object.keys(localStorage)
+      .filter(k => k.startsWith('tasks:'))
+      .map(k => k.slice('tasks:'.length));
+    await Promise.all(dateKeys.map(dk => mergeDateWithCloud(uid, dk).catch(()=>{})));
   }
 
-  // Mirrors migrateLocalTasksToAccount for appearance: if this device
+  // Mirrors mergeLocalWithAccount for appearance: if this device
   // customized a theme before ever signing in, and the account doesn't
   // have an appearance saved yet, push the local one up instead of
   // silently losing it to whatever loadAppearanceForUser pulls down next.
@@ -2120,10 +2158,10 @@
       try{ localStorage.setItem(SYNC_ENABLED_KEY, syncEnabled ? '1' : '0'); }catch(e){}
       updateSyncToggleUI();
       if(syncEnabled && currentUser){
-        taskCache.clear(); // stop trusting reads made while sync was paused
         toast('sync resumed');
+        try{ await mergeLocalWithAccount(currentUser.uid); }catch(e){}
+        taskCache.clear(); // stop trusting reads made while sync was paused
         await refresh();
-        migrateLocalTasksToAccount(currentUser.uid).catch(()=>{});
         migrateLocalAppearanceToAccount(currentUser.uid)
           .then(() => loadAppearanceForUser(currentUser.uid))
           .catch(()=>{});
@@ -2182,7 +2220,7 @@
         updateLastSyncNote();
         refresh(); // show tasks immediately — don't wait on migration/appearance
         if(syncEnabled){
-          migrateLocalTasksToAccount(user.uid).then(() => { taskCache.clear(); refresh(); }).catch(()=>{});
+          mergeLocalWithAccount(user.uid).then(() => { taskCache.clear(); refresh(); }).catch(()=>{});
           migrateLocalAppearanceToAccount(user.uid)
             .then(() => loadAppearanceForUser(user.uid))
             .catch(()=>{});
