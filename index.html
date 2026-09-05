@@ -48,24 +48,42 @@
 
   /* Desktop / wide-viewport layout: a mobile-width single column stretched
      edge-to-edge across a 1200px+ browser window looks unfinished, so above
-     720px the app becomes a framed, centered column instead — same
-     structure, just presented like a real desktop app window rather than
-     a phone screen someone forgot to constrain. */
+     720px the app becomes a framed, centered floating window instead — same
+     structure, just presented like a real desktop app rather than a phone
+     screen someone forgot to constrain. */
   @media (min-width: 720px){
     html{ background: var(--surface-2); }
     body{
       max-width: 640px;
-      margin: 0 auto;
-      min-height: 100vh;
-      border-left: 1px solid var(--border);
-      border-right: 1px solid var(--border);
-      box-shadow: 0 0 90px rgba(0,0,0,0.35);
+      margin: 28px auto;
+      min-height: calc(100vh - 56px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 20px 90px rgba(0,0,0,0.4);
     }
+    .appbar{ border-radius: 20px 20px 0 0; }
+    .add-bar{ border-radius: 0 0 20px 20px; }
   }
   @media (min-width: 1080px){
     body{ max-width: 760px; }
     .appbar-title{ font-size: 21px; }
     .task-text{ font-size: 16px; }
+  }
+
+  /* Hover feedback for pointer devices only — mobile/touch gets :active
+     instead, so tapping never leaves a "stuck" hover state behind. */
+  @media (hover: hover) and (pointer: fine){
+    .navbtn:hover, .iconbtn:hover{ background: var(--surface-2); border-color: var(--border-strong); }
+    .menu-item:hover{ background: var(--surface-2); }
+    .task-content:hover{ border-color: var(--border-strong); }
+    .stamp:hover{ border-color: var(--accent); }
+    #todayBtn:hover{ background: var(--surface); border-color: var(--border-strong); }
+    .cal-day:not(.other-month):hover{ background: var(--surface-2); }
+    .theme-swatch:hover{ border-color: var(--border-strong); }
+    #addBtn:hover{ filter: brightness(1.08); }
+    .row-del-btn:hover{ color: var(--danger); background: rgba(239,95,121,0.1); }
+    .modal-close:hover{ background: var(--surface); color: var(--text); }
   }
   button{ font-family: inherit; cursor: pointer; }
   button:focus-visible, input:focus-visible{ outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -808,7 +826,7 @@
     transition: opacity .25s var(--ease), transform .25s var(--ease);
     z-index: 60;
   }
-  .status-toast.show{ opacity: 0.96; transform: translateX(-50%) translateY(0); }
+  .status-toast.show{ opacity: 0.96; transform: translateX(-50%) translateY(0); pointer-events: auto; }
 
   .export-toast{
     position: absolute;
@@ -1298,9 +1316,34 @@
   // that's already in the cloud gets overwritten just because a stale local
   // copy also happens to exist. Safe to call repeatedly; it's a no-op once
   // both sides already agree.
+  // Records that a task was removed locally, keyed by date. A plain union-merge
+  // can't tell "this task never existed here" apart from "this task was
+  // deleted here" — without this, deleting or carrying over a task while sync
+  // is paused would get silently resurrected the next time sync turns back on,
+  // because the merge would just see the cloud still has it and keep it.
+  function recordDeletionTombstone(dateKey, taskId){
+    const key = 'tomb:' + dateKey;
+    let ids = [];
+    try{ ids = JSON.parse(localStorage.getItem(key) || '[]'); }catch(e){}
+    if(!ids.includes(taskId)){
+      ids.push(taskId);
+      try{ localStorage.setItem(key, JSON.stringify(ids)); }catch(e){}
+    }
+  }
+  function clearDeletionTombstone(dateKey, taskId){
+    const key = 'tomb:' + dateKey;
+    try{
+      const ids = JSON.parse(localStorage.getItem(key) || '[]').filter(id => id !== taskId);
+      if(ids.length) localStorage.setItem(key, JSON.stringify(ids));
+      else localStorage.removeItem(key);
+    }catch(e){}
+  }
+
   async function mergeDateWithCloud(uid, dateKey){
     let localTasks = [];
     try{ localTasks = JSON.parse(localStorage.getItem('tasks:' + dateKey) || '[]'); }catch(e){}
+    let tombIds = [];
+    try{ tombIds = JSON.parse(localStorage.getItem('tomb:' + dateKey) || '[]'); }catch(e){}
     const ref = fbDb.collection('users').doc(uid).collection('tasks').doc(dateKey);
     let cloudTasks = [], existed = false;
     try{
@@ -1308,12 +1351,17 @@
       existed = snap.exists;
       cloudTasks = snap.exists ? (snap.data().items || []) : [];
     }catch(e){ return; } // can't reach the network — leave both sides untouched rather than risk clobbering
-    if(!localTasks.length && !cloudTasks.length) return;
+    if(!localTasks.length && !cloudTasks.length && !tombIds.length) return;
 
     const byId = new Map();
     cloudTasks.forEach(t => byId.set(t.id, t));
     let needsPush = !existed;
     localTasks.forEach(t => { if(!byId.has(t.id)){ byId.set(t.id, t); needsPush = true; } });
+
+    // Re-apply any deletions that happened while sync was paused, so a task
+    // removed offline doesn't reappear just because the cloud still has it.
+    tombIds.forEach(id => { if(byId.has(id)){ byId.delete(id); needsPush = true; } });
+
     const merged = Array.from(byId.values());
 
     if(needsPush){
@@ -1321,6 +1369,7 @@
     }
     localStorage.setItem('tasks:' + dateKey, JSON.stringify(merged));
     taskCache.set(dateKey, { tasks: merged, ts: Date.now() });
+    if(tombIds.length){ try{ localStorage.removeItem('tomb:' + dateKey); }catch(e){} }
   }
   async function mergeLocalWithAccount(uid){
     const dateKeys = Object.keys(localStorage)
@@ -1504,10 +1553,12 @@
     if(removedIdx === -1) return;
     const removedTask = currentTasks[removedIdx];
     currentTasks = currentTasks.filter(t => t.id !== id);
+    recordDeletionTombstone(fmtKey(current), id);
     render(currentTasks);
     await saveTasks(current, currentTasks);
     toast('Task deleted', async () => {
       currentTasks = [...currentTasks.slice(0, removedIdx), removedTask, ...currentTasks.slice(removedIdx)];
+      clearDeletionTombstone(fmtKey(current), id);
       render(currentTasks);
       await saveTasks(current, currentTasks);
     });
@@ -1679,6 +1730,8 @@
       const fullDayTasks = await loadTasks(day.date);
       const remaining = fullDayTasks.filter(t => !ids.includes(t.id));
       const moving = fullDayTasks.filter(t => ids.includes(t.id));
+      const sourceDateKey = fmtKey(day.date);
+      ids.forEach(id => recordDeletionTombstone(sourceDateKey, id));
       await saveTasks(day.date, remaining); // remove from source day
       moving.forEach(t => movedTasks.push({ ...t, id: uid(), done: false }));
     }
@@ -2375,7 +2428,14 @@
   appearanceClose.addEventListener('click', () => appearanceBackdrop.classList.remove('show'));
   appearanceBackdrop.addEventListener('click', (e) => { if(e.target === appearanceBackdrop) appearanceBackdrop.classList.remove('show'); });
 
-  const APP_VERSION = '2.4.5.0';
+  // Single source of truth for the version number is manifest.json's
+  // "version" field — sw.js reads the same field to name its cache, so the
+  // two never need to be updated in two places by hand. This constant is
+  // just the fallback shown if that fetch hasn't resolved yet (or fails).
+  let APP_VERSION = '2.4.6.0';
+  fetch('./manifest.json').then(r => r.json()).then(data => {
+    if(data.version) APP_VERSION = data.version;
+  }).catch(()=>{});
   const aboutBtn = document.getElementById('aboutBtn');
   const aboutBackdrop = document.getElementById('aboutBackdrop');
   const aboutClose = document.getElementById('aboutClose');
