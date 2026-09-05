@@ -1,4 +1,4 @@
-const CACHE_NAME = 'todo-tracker-v2.4.2.0';
+const CACHE_NAME = 'todo-tracker-v2.4.3.0';
 const APP_SHELL = ['./', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (event) => {
@@ -17,8 +17,6 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// HTML pages: network-first, so a fresh deploy is picked up immediately.
-// Falls back to the cached copy only if the network is unavailable.
 function isHtmlRequest(request) {
   return request.mode === 'navigate' ||
     (request.headers.get('accept') || '').includes('text/html');
@@ -26,7 +24,7 @@ function isHtmlRequest(request) {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
-  if (new URL(event.request.url).origin !== self.location.origin) return; // let cross-origin (Firebase, fonts) pass through untouched
+  if (new URL(event.request.url).origin !== self.location.origin) return;
 
   if (isHtmlRequest(event.request)) {
     event.respondWith(
@@ -41,7 +39,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Everything else (icons, manifest, etc.): cache-first for speed and offline use.
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
