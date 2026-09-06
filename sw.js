@@ -1,10 +1,6 @@
 const APP_SHELL = ['./', './index.html', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 
-// Single source of truth for the version is manifest.json's "version" field —
-// index.html reads the same field for its About screen, so the two can never
-// drift out of sync by someone updating one file and forgetting the other.
-// FALLBACK_CACHE_NAME only matters if manifest.json is ever unreachable.
-const FALLBACK_CACHE_NAME = 'todo-tracker-v2.4.6.0';
+const FALLBACK_CACHE_NAME = 'todo-tracker-v2.5.0.0';
 let cacheNamePromise = null;
 function getCacheName(){
   if(!cacheNamePromise){
