@@ -46,36 +46,101 @@
     position: relative;
   }
 
-  /* Desktop / wide-viewport layout: a mobile-width single column stretched
-     edge-to-edge across a 1200px+ browser window looks unfinished, so above
-     720px the app becomes a framed, centered floating window instead — same
-     structure, just presented like a real desktop app rather than a phone
-     screen someone forgot to constrain. */
-  @media (min-width: 720px){
-    html{ background: var(--surface-2); }
+  /* Mobile default: sidebar/main wrappers are invisible to layout — their
+     children flow directly into body's normal single column, exactly as if
+     the wrappers weren't there at all. */
+  .app-sidebar, .app-main{ display: contents; }
+
+  /* Desktop / wide-viewport layout: this used to just center a narrower
+     phone-width column on a bigger screen, which still looked and behaved
+     like a phone someone stretched out. Above 900px the app now uses a real
+     desktop shape instead — a persistent sidebar (navigation, progress,
+     account/theme/export/about — no hamburger needed since there's room to
+     just show them) next to a full-width main panel for the task list
+     itself, using the actual screen instead of floating a phone on it. */
+  @media (min-width: 900px){
+    html{ background: var(--bg); }
     body{
-      max-width: 640px;
-      margin: 28px auto;
-      min-height: calc(100vh - 56px);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      overflow: hidden;
-      box-shadow: 0 20px 90px rgba(0,0,0,0.4);
+      display: flex;
+      flex-direction: row;
+      max-width: none;
+      margin: 0;
+      min-height: 100vh;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+      overflow: visible;
     }
-    .appbar{ border-radius: 20px 20px 0 0; }
-    .add-bar{ border-radius: 0 0 20px 20px; }
+    .app-sidebar{
+      display: flex;
+      flex-direction: column;
+      width: 320px;
+      flex: 0 0 320px;
+      height: 100vh;
+      position: sticky;
+      top: 0;
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-strong) transparent;
+    }
+    .app-main{
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 auto;
+      height: 100vh;
+      min-width: 0;
+    }
+    #menuBtn{ display: none; } /* everything it opened now lives inline below */
+    .appbar{ position: static; background: none; backdrop-filter: none; border-bottom: none; padding: 24px 20px 8px; flex: 0 0 auto; }
+    .appbar-title{ font-size: 19px; }
+    .progress-row{ padding: 10px 20px 6px; }
+    .carry-banner{ margin: 10px 20px 0; }
+    .sidebar-quicklinks{
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 10px 12px 20px;
+      margin-top: auto; /* pins the account/theme/export/about links to the bottom of the sidebar */
+      border-top: 1px solid var(--border);
+    }
+    .sidebar-link{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-size: 13.5px;
+      padding: 9px 8px;
+      border-radius: 10px;
+      text-align: left;
+      position: relative;
+    }
+    .sidebar-link .menu-item-icon{
+      width: 26px; height: 26px;
+      background: var(--surface);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex: 0 0 auto;
+    }
+    .sidebar-link .sync-dot{ position: absolute; top: 6px; right: 6px; }
+    .sidebar-link:active{ background: var(--surface-2); }
+
+    .tasks{ padding: 20px 28px 24px; max-width: 780px; }
+    .add-bar{ max-width: 780px; padding: 14px 28px calc(16px + var(--safe-bottom)); }
+    .task-text{ font-size: 15.5px; }
   }
-  @media (min-width: 1080px){
-    body{ max-width: 760px; }
-    .appbar-title{ font-size: 21px; }
-    .task-text{ font-size: 16px; }
+  @media (min-width: 1300px){
+    .app-sidebar{ width: 340px; flex-basis: 340px; }
+    .tasks, .add-bar{ max-width: 860px; }
   }
 
   /* Hover feedback for pointer devices only — mobile/touch gets :active
      instead, so tapping never leaves a "stuck" hover state behind. */
   @media (hover: hover) and (pointer: fine){
     .navbtn:hover, .iconbtn:hover{ background: var(--surface-2); border-color: var(--border-strong); }
-    .menu-item:hover{ background: var(--surface-2); }
+    .menu-item:hover, .sidebar-link:hover{ background: var(--surface-2); color: var(--text); }
     .task-content:hover{ border-color: var(--border-strong); }
     .stamp:hover{ border-color: var(--accent); }
     #todayBtn:hover{ background: var(--surface); border-color: var(--border-strong); }
@@ -253,6 +318,68 @@
     color: var(--danger); border-radius: 8px; padding: 6px 10px; font-size: 12.5px;
   }
   .modal-note{ font-size: 11.5px; color: var(--text-faint); margin-top: 12px; line-height: 1.5; }
+  .modal-divider{ height: 1px; background: var(--border); margin: 18px 0; }
+  .modal-subsection-title{
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+  .modal-subsection-title.danger-title{ color: var(--danger); }
+  .modal-field-row{ display: flex; gap: 8px; margin-bottom: 4px; }
+  .modal-field-row input{
+    flex: 1 1 auto;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 11px 13px;
+    font-size: 14px;
+    color: var(--text);
+    min-width: 0;
+  }
+  .modal-inline-btn{
+    flex: 0 0 auto;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    padding: 0 16px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .modal-danger-btn{
+    width: 100%;
+    background: none;
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    border-radius: 12px;
+    padding: 12px;
+    font-size: 13.5px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .modal-danger-btn:active{ background: rgba(239,95,121,0.1); }
+  .modal-danger-btn[disabled]{ opacity: 0.4; }
+  .modal-collapse{
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 12px;
+    background: var(--surface-2);
+    border-radius: 12px;
+  }
+  .modal-collapse.open{ display: flex; }
+  .modal-collapse input{
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    color: var(--text);
+  }
+  .danger-note{ color: var(--danger); margin: 0 0 4px; }
   .sync-toggle-row{
     display:flex; align-items:center; justify-content: space-between;
     gap: 12px;
@@ -496,6 +623,26 @@
     transition: transform .12s var(--ease), background .15s;
   }
   .carry-banner button:active{ transform: scale(0.95); background: var(--accent-dim); }
+
+  .pull-refresh-indicator{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 0;
+    overflow: hidden;
+    color: var(--text-dim);
+    font-size: 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    transform: translateY(-10px);
+    opacity: 0;
+    flex: 0 0 auto;
+  }
+  .pull-refresh-indicator.dragging{ transition: none; }
+  .pull-refresh-indicator.settling{ transition: height .25s var(--ease), transform .25s var(--ease), opacity .2s; }
+  .pull-refresh-spinner{ flex: 0 0 auto; }
+  .pull-refresh-spinner.spin{ animation: pull-spin 0.7s linear infinite; }
+  @keyframes pull-spin{ to{ transform: rotate(360deg); } }
 
   /* Task list */
   .tasks{
@@ -876,6 +1023,7 @@
 </style>
 </head>
 <body>
+  <div class="app-sidebar">
   <div class="appbar">
     <div class="appbar-top">
       <div class="appbar-title">To-Do Tracker<span class="appbar-byline">by yAmcHer</span></div>
@@ -920,6 +1068,36 @@
     <button id="carryBtn">Carry over</button>
   </div>
 
+  <div class="sidebar-quicklinks">
+    <button class="sidebar-link" id="sbNotifBtn">
+      <span class="menu-item-icon"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M7.5 1.5c-1.9 0-3 1.5-3 3.5v2c0 .7-.3 1.4-.9 2.1L2.5 10.5h10l-1.1-1.4c-.6-.7-.9-1.4-.9-2.1v-2c0-2-1.1-3.5-3-3.5z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M6 12.5c.3.6.8 1 1.5 1s1.2-.4 1.5-1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span>
+      <span>Task alarms</span>
+    </button>
+    <button class="sidebar-link" id="sbAppearanceBtn">
+      <span class="menu-item-icon"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 1.5a6.5 6.5 0 000 13c.8 0 1.2-.6.9-1.3-.2-.4-.1-.9.3-1.1.3-.2.7-.1.9.2.5.7 1.5.5 1.7-.3A6.5 6.5 0 008 1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><circle cx="5.3" cy="6.3" r="0.9" fill="currentColor"/><circle cx="8" cy="4.3" r="0.9" fill="currentColor"/><circle cx="10.7" cy="6.3" r="0.9" fill="currentColor"/></svg></span>
+      <span>Themes</span>
+    </button>
+    <button class="sidebar-link" id="sbExportBtn">
+      <span class="menu-item-icon"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0L5 7m3 3l3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12.5v1a1 1 0 001 1h8a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span>
+      <span>Export tasks</span>
+    </button>
+    <button class="sidebar-link" id="sbAccountBtn">
+      <span class="menu-item-icon"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5.4" r="2.8" stroke="currentColor" stroke-width="1.3"/><path d="M2.5 13.2c0-2.8 2.5-4.5 5.5-4.5s5.5 1.7 5.5 4.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span>
+      <span id="sbAccountLabel">Account & sync</span>
+      <span class="sync-dot" id="sbSyncDot"></span>
+    </button>
+    <button class="sidebar-link" id="sbAboutBtn">
+      <span class="menu-item-icon"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.8" stroke="currentColor" stroke-width="1.3"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="5.1" r="0.9" fill="currentColor"/></svg></span>
+      <span>About</span>
+    </button>
+  </div>
+  </div>
+
+  <div class="app-main">
+  <div class="pull-refresh-indicator" id="pullRefreshIndicator">
+    <svg class="pull-refresh-spinner" id="pullRefreshSpinner" width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M15.5 9a6.5 6.5 0 10-1.8 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M15.8 5.5v3.8h-3.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span id="pullRefreshLabel">Pull to refresh</span>
+  </div>
   <div class="tasks" id="taskList"></div>
 
   <div class="add-bar">
@@ -931,6 +1109,7 @@
     <button id="addBtn" aria-label="Add task">
       <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2V16M2 9H16" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
     </button>
+  </div>
   </div>
 
   <div class="status-toast" id="statusToast"><span>saved</span></div>
@@ -1089,6 +1268,35 @@
           <span id="forceSyncLabel">Force sync now</span>
         </button>
         <div class="modal-note" id="syncStatusNote">Pushes everything on this device to your account and pulls down anything new — works even while sync is paused.</div>
+
+        <div class="modal-divider"></div>
+        <div class="modal-subsection-title">Profile</div>
+        <div class="modal-field-row">
+          <input type="text" id="displayNameInput" placeholder="Display name" maxlength="40" autocomplete="name">
+          <button type="button" class="modal-inline-btn" id="saveDisplayNameBtn">Save</button>
+        </div>
+        <div class="modal-error" id="displayNameError"></div>
+
+        <div class="modal-subsection-title">Security</div>
+        <button type="button" class="modal-secondary-btn" id="changePasswordToggleBtn">Change password</button>
+        <div class="modal-collapse" id="changePasswordPanel">
+          <input type="password" id="currentPasswordInput" placeholder="Current password" autocomplete="current-password">
+          <input type="password" id="newPasswordInput" placeholder="New password" autocomplete="new-password">
+          <input type="password" id="confirmPasswordInput" placeholder="Confirm new password" autocomplete="new-password">
+          <div class="modal-error" id="changePasswordError"></div>
+          <button type="button" class="modal-primary-btn" id="submitPasswordChangeBtn">Update password</button>
+        </div>
+
+        <div class="modal-divider"></div>
+        <div class="modal-subsection-title danger-title">Danger zone</div>
+        <button type="button" class="modal-danger-btn" id="deleteAccountToggleBtn">Delete account</button>
+        <div class="modal-collapse" id="deleteAccountPanel">
+          <div class="modal-note danger-note">This permanently deletes your account and everything synced to it. This cannot be undone.</div>
+          <input type="password" id="deleteAccountPasswordInput" placeholder="Confirm your password" autocomplete="current-password">
+          <input type="text" id="deleteAccountTypeInput" placeholder='Type "DELETE" to confirm' autocomplete="off">
+          <div class="modal-error" id="deleteAccountError"></div>
+          <button type="button" class="modal-danger-btn" id="deleteAccountConfirmBtn" disabled>Permanently delete my account</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1244,6 +1452,30 @@
   const writeSeq = new Map(); // dateKey -> counter, bumped synchronously on every save so
                                // an older, still-in-flight read can never overwrite a newer write
 
+  const STALE_REVALIDATE_AFTER = 5000; // cache older than this triggers a silent background check
+  function revalidateInBackground(dateKey, key, seqAtStart){
+    if(!fbDb || !currentUser) return;
+    fbDb.collection('users').doc(currentUser.uid).collection('tasks').doc(dateKey).get()
+      .then((doc) => {
+        if((writeSeq.get(dateKey) || 0) !== seqAtStart) return; // a newer local write happened meanwhile — don't clobber it
+        const tasks = doc.exists ? (doc.data().items || []) : [];
+        const cachedNow = taskCache.get(dateKey);
+        const unchanged = cachedNow && JSON.stringify(cachedNow.tasks) === JSON.stringify(tasks);
+        if(tasks.length || !localStorage.getItem(key)){
+          localStorage.setItem(key, JSON.stringify(tasks));
+        }
+        taskCache.set(dateKey, { tasks, ts: Date.now() });
+        // Only touch the visible list if the user is still looking at this
+        // exact day and something actually changed — otherwise this was
+        // just a quiet confirmation that nothing needed updating.
+        if(!unchanged && fmtKey(current) === dateKey){
+          currentTasks = tasks;
+          render(currentTasks);
+        }
+      })
+      .catch(()=>{}); // opportunistic only — a failure here just means we keep showing the cache, same as before
+  }
+
   async function loadTasks(dateObj, opts){
     const opt = opts || {};
     const key = localKey(dateObj);
@@ -1252,6 +1484,9 @@
     if(fbDb && currentUser && (syncActive() || opt.force)){
       const cached = taskCache.get(dateKey);
       if(!opt.force && cached && (Date.now() - cached.ts) < TASK_CACHE_TTL){
+        if((Date.now() - cached.ts) > STALE_REVALIDATE_AFTER){
+          revalidateInBackground(dateKey, key, seqAtStart);
+        }
         return cached.tasks;
       }
       try{
@@ -1294,20 +1529,24 @@
       localStorage.setItem(key, JSON.stringify(tasks));
     }catch(e){}
     taskCache.set(dateKey, { tasks, ts: Date.now() }); // keep cache warm optimistically
+
+    // Give instant feedback the moment the local write lands, instead of
+    // waiting on a Firestore round trip that can take anywhere from ~100ms
+    // on a good connection to the full 6s timeout on a bad one. The local
+    // save is already durable by this point — there's no reason the toast,
+    // or anything else the user is doing, should be gated on the network.
+    if(!opt.silent) toast(currentUser && !syncEnabled ? 'saved locally — sync paused' : 'saved');
+
     if(fbDb && currentUser && (syncActive() || opt.force)){
       try{
         await withTimeout(
           fbDb.collection('users').doc(currentUser.uid).collection('tasks').doc(dateKey).set({ items: tasks }),
           6000
         );
-        if(!opt.silent) toast('synced');
-        return;
       }catch(e){
-        if(!opt.silent) toast('saved locally — sync failed');
-        return;
+        if(!opt.silent) toast('sync failed — will retry next time');
       }
     }
-    if(!opt.silent) toast(currentUser && !syncEnabled ? 'saved locally — sync paused' : 'saved');
   }
 
   // Runs every time sync goes from off to on (login, or toggling sync back on) —
@@ -1514,7 +1753,8 @@
 
   let currentTasks = [];
 
-  async function refresh(){
+  async function refresh(opts){
+    const opt = opts || {};
     progressHeadline.textContent = 'Loading…';
     progressSub.textContent = '';
     lastPct = 0;
@@ -1524,7 +1764,7 @@
     // instead of waiting for the day to finish loading first — the two
     // network calls (or the one ranged query) now overlap.
     const carryPromise = refreshCarryIndicator();
-    currentTasks = await loadTasks(current);
+    currentTasks = await loadTasks(current, { force: !!opt.force });
     render(currentTasks);
     await carryPromise;
   }
@@ -1991,6 +2231,67 @@
     });
   })();
 
+  /* ---------- Pull-to-refresh ----------
+     Only activates when the task list is already scrolled to the very top —
+     pulling down further from there is unambiguous, so it never fights with
+     normal scrolling through a long list. Triggers a forced refresh that
+     bypasses the task cache, same underlying path as "Force sync now". */
+  (function attachPullToRefresh(){
+    const indicator = document.getElementById('pullRefreshIndicator');
+    const spinner = document.getElementById('pullRefreshSpinner');
+    const label = document.getElementById('pullRefreshLabel');
+    const PULL_THRESHOLD = 64;
+    const PULL_MAX = 90;
+    let startY = 0, dragging = false, pulling = false, refreshing = false;
+
+    function setPull(px){
+      indicator.style.height = px + 'px';
+      indicator.style.transform = `translateY(${px > 0 ? 0 : -10}px)`;
+      indicator.style.opacity = Math.min(px / PULL_THRESHOLD, 1);
+      label.textContent = px >= PULL_THRESHOLD ? 'Release to refresh' : 'Pull to refresh';
+    }
+
+    taskListEl.addEventListener('pointerdown', (e) => {
+      if(e.target.closest('.task-content')) return; // let per-task swipe-to-delete own its own gesture
+      if(taskListEl.scrollTop > 0 || refreshing) return;
+      dragging = true; pulling = false; startY = e.clientY;
+      indicator.classList.remove('settling');
+    });
+    taskListEl.addEventListener('pointermove', (e) => {
+      if(!dragging || refreshing) return;
+      const dy = e.clientY - startY;
+      if(dy <= 0){ return; }
+      if(taskListEl.scrollTop > 0){ dragging = false; return; } // started at top, but has since scrolled — bail
+      pulling = true;
+      indicator.classList.add('dragging');
+      setPull(Math.min(dy * 0.55, PULL_MAX));
+    });
+    async function release(){
+      if(!dragging) return;
+      dragging = false;
+      indicator.classList.remove('dragging');
+      indicator.classList.add('settling');
+      if(!pulling){ setPull(0); return; }
+      const committed = parseFloat(indicator.style.height || '0') >= PULL_THRESHOLD;
+      pulling = false;
+      if(!committed){ setPull(0); return; }
+
+      refreshing = true;
+      setPull(PULL_THRESHOLD);
+      spinner.classList.add('spin');
+      label.textContent = 'Refreshing…';
+      try{
+        await refresh({ force: true });
+      } finally {
+        spinner.classList.remove('spin');
+        setPull(0);
+        refreshing = false;
+      }
+    }
+    taskListEl.addEventListener('pointerup', release);
+    taskListEl.addEventListener('pointercancel', release);
+  })();
+
   let swRegistration = null;
   if('serviceWorker' in navigator){
     window.addEventListener('load', () => {
@@ -2200,6 +2501,120 @@
     try{ await fbAuth.signOut(); }catch(e){}
   });
 
+  /* ---------- Profile: display name ---------- */
+  const displayNameInput = document.getElementById('displayNameInput');
+  const saveDisplayNameBtn = document.getElementById('saveDisplayNameBtn');
+  const displayNameError = document.getElementById('displayNameError');
+  saveDisplayNameBtn.addEventListener('click', async () => {
+    if(!currentUser) return;
+    const name = displayNameInput.value.trim();
+    displayNameError.textContent = '';
+    saveDisplayNameBtn.disabled = true;
+    try{
+      await withTimeout(currentUser.updateProfile({ displayName: name || null }), 6000);
+      authEmailLabel.textContent = name ? `${name} · ${currentUser.email}` : (currentUser.email || 'Signed in');
+      toast('Display name saved');
+    }catch(e){
+      displayNameError.textContent = (e && e.message) ? e.message.replace('Firebase: ', '') : 'Could not save name.';
+    }
+    saveDisplayNameBtn.disabled = false;
+  });
+
+  /* ---------- Security: change password (requires reauthentication) ---------- */
+  function reauthenticate(password){
+    const credential = firebase.auth.EmailAuthProvider.credential(currentUser.email, password);
+    return currentUser.reauthenticateWithCredential(credential);
+  }
+
+  const changePasswordToggleBtn = document.getElementById('changePasswordToggleBtn');
+  const changePasswordPanel = document.getElementById('changePasswordPanel');
+  const currentPasswordInput = document.getElementById('currentPasswordInput');
+  const newPasswordInput = document.getElementById('newPasswordInput');
+  const confirmPasswordInput = document.getElementById('confirmPasswordInput');
+  const changePasswordError = document.getElementById('changePasswordError');
+  const submitPasswordChangeBtn = document.getElementById('submitPasswordChangeBtn');
+
+  changePasswordToggleBtn.addEventListener('click', () => {
+    changePasswordPanel.classList.toggle('open');
+    changePasswordError.textContent = '';
+  });
+
+  submitPasswordChangeBtn.addEventListener('click', async () => {
+    const current = currentPasswordInput.value;
+    const next = newPasswordInput.value;
+    const confirm = confirmPasswordInput.value;
+    changePasswordError.textContent = '';
+    if(!current || !next){ changePasswordError.textContent = 'Fill in both password fields.'; return; }
+    if(next.length < 6){ changePasswordError.textContent = 'New password must be at least 6 characters.'; return; }
+    if(next !== confirm){ changePasswordError.textContent = 'New passwords don\'t match.'; return; }
+    submitPasswordChangeBtn.disabled = true;
+    try{
+      await withTimeout(reauthenticate(current), 6000);
+      await withTimeout(currentUser.updatePassword(next), 6000);
+      currentPasswordInput.value = '';
+      newPasswordInput.value = '';
+      confirmPasswordInput.value = '';
+      changePasswordPanel.classList.remove('open');
+      toast('Password updated');
+    }catch(e){
+      changePasswordError.textContent = (e && e.message) ? e.message.replace('Firebase: ', '') : 'Could not update password.';
+    }
+    submitPasswordChangeBtn.disabled = false;
+  });
+
+  /* ---------- Danger zone: delete account (double confirmation) ---------- */
+  const deleteAccountToggleBtn = document.getElementById('deleteAccountToggleBtn');
+  const deleteAccountPanel = document.getElementById('deleteAccountPanel');
+  const deleteAccountPasswordInput = document.getElementById('deleteAccountPasswordInput');
+  const deleteAccountTypeInput = document.getElementById('deleteAccountTypeInput');
+  const deleteAccountError = document.getElementById('deleteAccountError');
+  const deleteAccountConfirmBtn = document.getElementById('deleteAccountConfirmBtn');
+
+  deleteAccountToggleBtn.addEventListener('click', () => {
+    deleteAccountPanel.classList.toggle('open');
+    deleteAccountError.textContent = '';
+  });
+
+  function updateDeleteConfirmState(){
+    // First confirmation gate: password filled in AND the literal word DELETE typed.
+    deleteAccountConfirmBtn.disabled = !(deleteAccountPasswordInput.value && deleteAccountTypeInput.value === 'DELETE');
+  }
+  deleteAccountPasswordInput.addEventListener('input', updateDeleteConfirmState);
+  deleteAccountTypeInput.addEventListener('input', updateDeleteConfirmState);
+
+  async function deleteAllUserData(uid){
+    // Best-effort cleanup of everything we know we wrote for this user.
+    // Firestore doesn't cascade-delete subcollections on its own.
+    try{
+      const tasksSnap = await withTimeout(fbDb.collection('users').doc(uid).collection('tasks').get(), 8000);
+      await Promise.all(tasksSnap.docs.map(d => d.ref.delete().catch(()=>{})));
+    }catch(e){}
+    try{ await fbDb.collection('users').doc(uid).collection('settings').doc('appearance').delete(); }catch(e){}
+    try{ await fbDb.collection('users').doc(uid).delete(); }catch(e){}
+  }
+
+  deleteAccountConfirmBtn.addEventListener('click', async () => {
+    // Second confirmation gate: an explicit native dialog, right before the
+    // irreversible action actually fires — typing "DELETE" above gets you
+    // here, this is the last chance to back out.
+    const reallySure = window.confirm('This will permanently delete your account and all synced tasks. This cannot be undone. Continue?');
+    if(!reallySure) return;
+
+    deleteAccountError.textContent = '';
+    deleteAccountConfirmBtn.disabled = true;
+    const uid = currentUser.uid;
+    try{
+      await withTimeout(reauthenticate(deleteAccountPasswordInput.value), 6000);
+      await deleteAllUserData(uid);
+      await withTimeout(currentUser.delete(), 8000);
+      authBackdrop.classList.remove('show');
+      toast('Account deleted');
+    }catch(e){
+      deleteAccountError.textContent = (e && e.message) ? e.message.replace('Firebase: ', '') : 'Could not delete account.';
+      deleteAccountConfirmBtn.disabled = false;
+    }
+  });
+
   /* ---------- Sync on/off + force sync ---------- */
   const syncToggleBtn = document.getElementById('syncToggleBtn');
   const syncToggleSub = document.getElementById('syncToggleSub');
@@ -2220,6 +2635,10 @@
       accountMenuSub.textContent = syncEnabled ? (currentUser.email || 'Signed in') : 'Sync paused';
     }
     if(syncDot) syncDot.classList.toggle('show', !!currentUser && syncEnabled);
+    const sbAccountLabel = document.getElementById('sbAccountLabel');
+    const sbSyncDot = document.getElementById('sbSyncDot');
+    if(sbAccountLabel) sbAccountLabel.textContent = currentUser ? (syncEnabled ? (currentUser.email || 'Signed in') : 'Sync paused') : 'Account & sync';
+    if(sbSyncDot) sbSyncDot.classList.toggle('show', !!currentUser && syncEnabled);
     refreshMenuBtnDot();
   }
   function updateLastSyncNote(){
@@ -2293,7 +2712,9 @@
         accountBtn.classList.add('signed-in');
         authSignedOutView.style.display = 'none';
         authSignedInView.style.display = 'block';
-        authEmailLabel.textContent = user.email || 'Signed in';
+        authEmailLabel.textContent = user.displayName ? `${user.displayName} · ${user.email}` : (user.email || 'Signed in');
+        const displayNameInput = document.getElementById('displayNameInput');
+        if(displayNameInput) displayNameInput.value = user.displayName || '';
         updateSyncToggleUI();
         updateLastSyncNote();
         refresh(); // show tasks immediately — don't wait on migration/appearance
@@ -2307,6 +2728,10 @@
         accountBtn.classList.remove('signed-in');
         syncDot.classList.remove('show');
         if(accountMenuSub) accountMenuSub.textContent = 'Not signed in';
+        const sbAccountLabel2 = document.getElementById('sbAccountLabel');
+        const sbSyncDot2 = document.getElementById('sbSyncDot');
+        if(sbAccountLabel2) sbAccountLabel2.textContent = 'Account & sync';
+        if(sbSyncDot2) sbSyncDot2.classList.remove('show');
         authSignedOutView.style.display = 'block';
         authSignedInView.style.display = 'none';
         refreshMenuBtnDot();
@@ -2432,7 +2857,7 @@
   // "version" field — sw.js reads the same field to name its cache, so the
   // two never need to be updated in two places by hand. This constant is
   // just the fallback shown if that fetch hasn't resolved yet (or fails).
-  let APP_VERSION = '2.4.6.0';
+  let APP_VERSION = '2.5.0.0';
   fetch('./manifest.json').then(r => r.json()).then(data => {
     if(data.version) APP_VERSION = data.version;
   }).catch(()=>{});
@@ -2645,6 +3070,24 @@
   }
   exportToastOpen.addEventListener('click', () => {
     if(exportToastUrl) window.open(exportToastUrl, '_blank');
+  });
+
+  /* ---------- Desktop sidebar quick links ----------
+     On desktop the sidebar shows these permanently instead of hiding them
+     behind the hamburger menu, but they're still the exact same feature —
+     forwarding the click to the existing hidden button reuses all of that
+     logic instead of duplicating it. */
+  const sidebarForwardMap = {
+    sbNotifBtn: notifBtn,
+    sbAppearanceBtn: appearanceBtn,
+    sbExportBtn: exportBtn,
+    sbAccountBtn: accountBtn,
+    sbAboutBtn: aboutBtn
+  };
+  Object.keys(sidebarForwardMap).forEach((sbId) => {
+    const sbEl = document.getElementById(sbId);
+    const target = sidebarForwardMap[sbId];
+    if(sbEl && target) sbEl.addEventListener('click', () => target.click());
   });
 
   refresh();
