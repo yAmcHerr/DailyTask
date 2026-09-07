@@ -50,51 +50,67 @@
      children flow directly into body's normal single column, exactly as if
      the wrappers weren't there at all. */
   .app-sidebar, .app-main{ display: contents; }
+  .sidebar-quicklinks{ display: none; } /* desktop-only — display:contents above only affects the wrapper, not this */
 
   /* Desktop / wide-viewport layout: this used to just center a narrower
      phone-width column on a bigger screen, which still looked and behaved
      like a phone someone stretched out. Above 900px the app now uses a real
-     desktop shape instead — a persistent sidebar (navigation, progress,
-     account/theme/export/about — no hamburger needed since there's room to
-     just show them) next to a full-width main panel for the task list
-     itself, using the actual screen instead of floating a phone on it. */
+     desktop shape instead — a full-width top bar for date navigation, a
+     persistent sidebar below it (progress, account/theme/export/about — no
+     hamburger needed since there's room to just show them), and a full-width
+     main panel for the task list, using the actual screen instead of
+     floating a narrow phone-width column on it. */
   @media (min-width: 900px){
     html{ background: var(--bg); }
     body{
-      display: flex;
-      flex-direction: row;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      grid-template-rows: auto 1fr;
+      grid-template-areas: "topbar topbar" "sidebar main";
       max-width: none;
       margin: 0;
-      min-height: 100vh;
+      height: 100vh;
       border: none;
       border-radius: 0;
       box-shadow: none;
-      overflow: visible;
+      overflow: hidden;
     }
+    .appbar{
+      grid-area: topbar;
+      position: static;
+      background: none;
+      backdrop-filter: none;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 16px 32px;
+    }
+    .appbar-top{ margin: 0; }
+    .date-row{ margin-top: 0; }
+    .appbar-title{ font-size: 19px; }
+    #menuBtn{ display: none; } /* everything it opened now lives inline in the sidebar below */
+
     .app-sidebar{
+      grid-area: sidebar;
       display: flex;
       flex-direction: column;
-      width: 320px;
-      flex: 0 0 320px;
-      height: 100vh;
-      position: sticky;
-      top: 0;
+      height: 100%;
       border-right: 1px solid var(--border);
       overflow-y: auto;
       scrollbar-width: thin;
       scrollbar-color: var(--border-strong) transparent;
     }
     .app-main{
+      grid-area: main;
       display: flex;
       flex-direction: column;
-      flex: 1 1 auto;
-      height: 100vh;
+      height: 100%;
       min-width: 0;
+      overflow: hidden; /* .tasks scrolls internally within this */
     }
-    #menuBtn{ display: none; } /* everything it opened now lives inline below */
-    .appbar{ position: static; background: none; backdrop-filter: none; border-bottom: none; padding: 24px 20px 8px; flex: 0 0 auto; }
-    .appbar-title{ font-size: 19px; }
-    .progress-row{ padding: 10px 20px 6px; }
+    .progress-row{ padding: 18px 20px 6px; }
     .carry-banner{ margin: 10px 20px 0; }
     .sidebar-quicklinks{
       display: flex;
@@ -127,13 +143,14 @@
     .sidebar-link .sync-dot{ position: absolute; top: 6px; right: 6px; }
     .sidebar-link:active{ background: var(--surface-2); }
 
-    .tasks{ padding: 20px 28px 24px; max-width: 780px; }
-    .add-bar{ max-width: 780px; padding: 14px 28px calc(16px + var(--safe-bottom)); }
+    .tasks{ padding: 24px 40px 24px; }
+    .add-bar{ padding: 16px 40px calc(18px + var(--safe-bottom)); }
     .task-text{ font-size: 15.5px; }
   }
   @media (min-width: 1300px){
-    .app-sidebar{ width: 340px; flex-basis: 340px; }
-    .tasks, .add-bar{ max-width: 860px; }
+    body{ grid-template-columns: 340px 1fr; }
+    .tasks{ padding: 28px 56px 28px; }
+    .add-bar{ padding: 18px 56px calc(20px + var(--safe-bottom)); }
   }
 
   /* Hover feedback for pointer devices only — mobile/touch gets :active
@@ -231,7 +248,7 @@
     display: none;
     align-items: flex-end;
     justify-content: center;
-    z-index: 50;
+    z-index: 70;
   }
   .modal-backdrop.show{ display: flex; }
   .modal-card{
@@ -501,6 +518,32 @@
     display:none; flex: 0 0 auto;
   }
   .menu-item-dot.show{ display: block; }
+
+  /* Export format chooser */
+  .format-list{ display:flex; flex-direction:column; gap: 6px; }
+  .format-option{
+    display:flex; align-items:center; gap: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    padding: 13px 14px;
+    border-radius: 14px;
+    color: var(--text);
+    text-align: left;
+    width: 100%;
+  }
+  .format-option:active{ background: var(--surface); }
+  .format-option:disabled{ opacity: 0.5; }
+  .format-option-icon{
+    flex: 0 0 auto;
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    background: rgba(124,107,240,0.16);
+    color: var(--accent);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .format-option-body{ display:flex; flex-direction:column; gap: 2px; }
+  .format-option-title{ font-size: 14.5px; font-weight: 600; }
+  .format-option-sub{ font-size: 11.5px; color: var(--text-dim); }
   .menu-item-chevron{ flex: 0 0 auto; color: var(--text-faint); }
 
   /* Themes (appearance) picker */
@@ -862,9 +905,9 @@
   .cal-card{
     max-width: 560px;
     max-height: 92vh;
-    padding: 20px 12px calc(20px + var(--safe-bottom));
+    padding: 18px 6px calc(18px + var(--safe-bottom));
   }
-  .cal-header{ display: flex; align-items: center; justify-content: space-between; margin: 0 8px; }
+  .cal-header{ display: flex; align-items: center; justify-content: space-between; margin: 0 6px 2px; }
   .cal-nav{
     background: var(--surface-2);
     border: 1px solid var(--border);
@@ -874,73 +917,121 @@
     font-size: 17px;
   }
   .cal-nav:active{ background: var(--surface); transform: scale(0.92); }
-  .cal-month-label{ font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 16.5px; }
+  .cal-month-label{ font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 17.5px; letter-spacing: -0.01em; }
   .cal-weekdays{
     display: grid; grid-template-columns: repeat(7, 1fr);
-    margin-top: 16px; margin-bottom: 6px;
-    padding: 0 3px;
+    margin-top: 16px; margin-bottom: 8px;
+    padding: 0 2px 8px;
+    border-bottom: 1px solid var(--border);
   }
   .cal-weekdays span{
-    text-align: center; font-size: 11.5px; color: var(--text-faint);
+    text-align: center; font-size: 11px; font-weight: 600; color: var(--text-faint);
     font-family: 'IBM Plex Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
   }
-  .cal-grid{ display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; padding: 0 3px; }
+  .cal-grid{
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    grid-auto-rows: 108px; /* fixed and uniform on purpose — content never grows a row */
+    gap: 4px;
+    padding: 0 2px;
+  }
   .cal-day{
-    min-height: 108px;
+    height: 108px;
     background: var(--surface);
-    border: 1px solid transparent;
-    border-radius: 12px;
+    border: 1px solid var(--border);
+    border-radius: 11px;
     padding: 6px 4px 4px;
-    display: flex; flex-direction: column; align-items: center;
+    display: flex; flex-direction: column; align-items: flex-start;
     overflow: hidden;
+    position: relative;
   }
   .cal-day:active{ background: var(--surface-2); }
-  .cal-day.empty{ background: none; pointer-events: none; }
-  .cal-day.today{ border-color: var(--accent); }
-  .cal-day.selected{ background: var(--accent); }
-  .cal-day.selected .cal-day-num{ color: #fff; }
-  .cal-day.selected .cal-task-chip{ background: rgba(255,255,255,0.24); color: #fff; }
+  .cal-day.empty{ background: none; border-color: transparent; pointer-events: none; }
+  .cal-day.today{ border-color: var(--accent); border-width: 1.5px; }
+  .cal-day.today .cal-day-num{ color: var(--accent); font-weight: 700; }
+  .cal-day.selected{ background: linear-gradient(135deg, var(--accent), var(--accent-2)); border-color: transparent; }
+  .cal-day.selected .cal-day-num{ color: #0E1013; }
+  .cal-day.selected .cal-task-chip{ background: rgba(14,16,19,0.22); color: rgba(14,16,19,0.82); }
+  .cal-day.selected .cal-task-chip.done{ background: rgba(14,16,19,0.14); }
+  .cal-day.selected .cal-task-time{ color: rgba(14,16,19,0.65); }
   .cal-day-num{
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 14px;
+    font-size: 13px;
+    font-weight: 600;
     color: var(--text);
-    margin-bottom: 4px;
+    margin-bottom: 5px;
+    flex: 0 0 auto;
   }
-  .cal-day-tasks{ display: flex; flex-direction: column; gap: 4px; width: 100%; }
+  .cal-day-tasks{ display: flex; flex-direction: column; gap: 3px; width: 100%; min-width: 0; overflow: hidden; }
   .cal-task-chip{
-    display: flex; flex-direction: column;
+    display: flex; align-items: baseline; gap: 4px;
     background: rgba(124,107,240,0.18);
     color: var(--text-dim);
     border-radius: 5px;
     padding: 3px 5px;
     width: 100%;
+    min-width: 0;
     text-align: left;
   }
   .cal-task-time{
     font-family: 'IBM Plex Mono', monospace;
-    font-size: 8.5px;
+    font-size: 8px;
     color: var(--accent);
-    line-height: 1.2;
+    flex: 0 0 auto;
   }
   .cal-task-chip.done .cal-task-time{ color: var(--text-faint); }
   .cal-task-name{
-    font-size: 10px;
-    line-height: 1.25;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    font-size: 9.5px;
+    line-height: 1.3;
+    white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1 1 auto;
   }
   .cal-task-chip.done{ background: rgba(47,217,168,0.16); color: var(--text-faint); }
   .cal-task-chip.done .cal-task-name{ text-decoration: line-through; }
-  .cal-day-more{ font-size: 9.5px; color: var(--text-faint); margin-top: 2px; }
+  .cal-day-more{ font-size: 8.5px; color: var(--text-faint); margin-top: 1px; flex: 0 0 auto; }
   .cal-loading{ text-align: center; color: var(--text-dim); font-size: 12.5px; padding: 30px 0; grid-column: 1 / -1; }
 
-  @media (max-width: 380px){
-    .cal-card{ padding-left: 8px; padding-right: 8px; }
-    .cal-day{ min-height: 88px; border-radius: 10px; }
-    .cal-day-num{ font-size: 13px; }
-    .cal-task-name{ font-size: 9.5px; }
+  /* Mobile-width cells show one real task line (via .cal-day-tasks-mobile)
+     plus dots for anything beyond that; wider cells (900px+) show real text
+     for the top two tasks via .cal-day-tasks. All three markups are always
+     rendered — this just picks which ones display. */
+  .cal-day-tasks{ display: none; }
+  .cal-day-more{ display: none; }
+  .cal-day-tasks-mobile{ display: flex; flex-direction: column; gap: 3px; width: 100%; min-width: 0; overflow: hidden; }
+  .cal-day-dots{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 3px;
+    align-items: center;
+  }
+  .cal-day-dot{
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--accent-2);
+    flex: 0 0 auto;
+  }
+  .cal-day-dot.done{ background: var(--text-faint); }
+  .cal-day.selected .cal-day-dot{ background: rgba(14,16,19,0.55); }
+  .cal-day-more-dot{ font-size: 8px; color: var(--text-faint); font-family: 'IBM Plex Mono', monospace; }
+  .cal-day.selected .cal-day-more-dot{ color: rgba(14,16,19,0.6); }
+
+  @media (min-width: 900px){
+    .cal-grid{ grid-auto-rows: 120px; }
+    .cal-day{ height: 120px; border-radius: 14px; }
+    .cal-day-num{ font-size: 14px; }
+    .cal-task-name{ font-size: 10.5px; }
+    .cal-task-time{ font-size: 9px; }
+    .cal-day-tasks{ display: flex; }
+    .cal-day-more{ display: block; }
+    .cal-day-tasks-mobile{ display: none; }
+    .cal-day-dots{ display: none; }
+    .cal-card{ max-width: 720px; }
   }
 
   .add-bar button#addBtn{
@@ -1023,7 +1114,6 @@
 </style>
 </head>
 <body>
-  <div class="app-sidebar">
   <div class="appbar">
     <div class="appbar-top">
       <div class="appbar-title">To-Do Tracker<span class="appbar-byline">by yAmcHer</span></div>
@@ -1043,6 +1133,7 @@
     </div>
   </div>
 
+  <div class="app-sidebar">
   <div class="progress-row">
     <div class="ring-wrap">
       <svg width="50" height="50" viewBox="0 0 50 50">
@@ -1156,6 +1247,28 @@
           <span class="menu-item-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.8" stroke="currentColor" stroke-width="1.3"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="5.1" r="0.9" fill="currentColor"/></svg></span>
           <span class="menu-item-label">About</span>
           <span class="menu-item-chevron">›</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="exportFormatBackdrop">
+    <div class="modal-card">
+      <button class="modal-close" id="exportFormatClose" aria-label="Close">✕</button>
+      <div class="modal-title">Export tasks</div>
+      <div class="modal-sub">Choose a format. Colors match your current theme.</div>
+      <div class="format-list">
+        <button type="button" class="format-option" id="exportFormatHtml">
+          <span class="format-option-icon"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 2h7l3 3v11a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M11 2v3h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></span>
+          <span class="format-option-body"><span class="format-option-title">HTML</span><span class="format-option-sub">Opens in any browser, matches your theme exactly</span></span>
+        </button>
+        <button type="button" class="format-option" id="exportFormatPdf">
+          <span class="format-option-icon"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 2h7l3 3v11a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M11 2v3h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></span>
+          <span class="format-option-body"><span class="format-option-title">PDF</span><span class="format-option-sub">Best for printing or sharing as a fixed document</span></span>
+        </button>
+        <button type="button" class="format-option" id="exportFormatDoc">
+          <span class="format-option-icon"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 2h7l3 3v11a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M11 2v3h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></span>
+          <span class="format-option-body"><span class="format-option-title">Word (.doc)</span><span class="format-option-sub">Opens directly in Microsoft Word for editing</span></span>
         </button>
       </div>
     </div>
@@ -2166,13 +2279,35 @@
       btn.className = 'cal-day' + (dateKey === todayKey ? ' today' : '') + (dateKey === selectedKey ? ' selected' : '');
       let inner = `<span class="cal-day-num">${day}</span>`;
       if(items.length){
+        const ordered = topTasksForDay(items);
+
+        // Desktop (900px+): real text for the top 2 tasks, "+N more" for the rest.
         const PREVIEW_COUNT = 2;
-        const top = topTasksForDay(items).slice(0, PREVIEW_COUNT);
+        const top = ordered.slice(0, PREVIEW_COUNT);
         inner += '<div class="cal-day-tasks">' + top.map(t => {
           const timeLine = t.time ? `<span class="cal-task-time">${shortTime12h(t.time).trim()}</span>` : '';
           return `<span class="cal-task-chip${t.done ? ' done' : ''}">${timeLine}<span class="cal-task-name">${escapeHtml(t.text)}</span></span>`;
         }).join('') + '</div>';
         if(items.length > PREVIEW_COUNT) inner += `<span class="cal-day-more">+${items.length - PREVIEW_COUNT} more</span>`;
+
+        // Mobile: a cell is only ~50px wide, but that's enough for ONE real
+        // (truncated) task line — showing something real beats an abstract
+        // dot for the task that actually matters most (has a time, or is
+        // just first). Any tasks beyond that first one become dots, which
+        // still fit reliably no matter how narrow the cell is.
+        const mobileTop = ordered.slice(0, 1);
+        const mobileRest = items.filter(t => !mobileTop.includes(t));
+        inner += '<div class="cal-day-tasks-mobile">' + mobileTop.map(t => {
+          const timeLine = t.time ? `<span class="cal-task-time">${shortTime12h(t.time).trim()}</span>` : '';
+          return `<span class="cal-task-chip${t.done ? ' done' : ''}">${timeLine}<span class="cal-task-name">${escapeHtml(t.text)}</span></span>`;
+        }).join('') + '</div>';
+        if(mobileRest.length){
+          const DOT_PREVIEW = 5;
+          inner += '<div class="cal-day-dots">' +
+            mobileRest.slice(0, DOT_PREVIEW).map(t => `<span class="cal-day-dot${t.done ? ' done' : ''}"></span>`).join('') +
+            (mobileRest.length > DOT_PREVIEW ? `<span class="cal-day-more-dot">+${mobileRest.length - DOT_PREVIEW}</span>` : '') +
+            '</div>';
+        }
       }
       btn.innerHTML = inner;
       btn.setAttribute('aria-label', `${dateKey}${items.length ? ', ' + items.length + ' task' + (items.length>1?'s':'') : ''}`);
@@ -2857,7 +2992,7 @@
   // "version" field — sw.js reads the same field to name its cache, so the
   // two never need to be updated in two places by hand. This constant is
   // just the fallback shown if that fetch hasn't resolved yet (or fails).
-  let APP_VERSION = '2.5.0.0';
+  let APP_VERSION = '2.6.0.0';
   fetch('./manifest.json').then(r => r.json()).then(data => {
     if(data.version) APP_VERSION = data.version;
   }).catch(()=>{});
@@ -2907,15 +3042,27 @@
 
   /* ---------- Export ---------- */
   const exportBtn = document.getElementById('exportBtn');
-  exportBtn.addEventListener('click', async () => {
+  const exportFormatBackdrop = document.getElementById('exportFormatBackdrop');
+  exportBtn.addEventListener('click', () => {
     closeMenu();
-    exportBtn.disabled = true;
-    try{
-      await runExport();
-    }finally{
-      exportBtn.disabled = false;
-    }
+    exportFormatBackdrop.classList.add('show');
   });
+  document.getElementById('exportFormatClose').addEventListener('click', () => exportFormatBackdrop.classList.remove('show'));
+  exportFormatBackdrop.addEventListener('click', (e) => { if(e.target === exportFormatBackdrop) exportFormatBackdrop.classList.remove('show'); });
+
+  async function runFormatExport(btn, fn){
+    const allBtns = exportFormatBackdrop.querySelectorAll('.format-option');
+    allBtns.forEach(b => b.disabled = true);
+    try{
+      await fn();
+      exportFormatBackdrop.classList.remove('show');
+    }finally{
+      allBtns.forEach(b => b.disabled = false);
+    }
+  }
+  document.getElementById('exportFormatHtml').addEventListener('click', function(){ runFormatExport(this, exportAsHtml); });
+  document.getElementById('exportFormatPdf').addEventListener('click', function(){ runFormatExport(this, exportAsPdf); });
+  document.getElementById('exportFormatDoc').addEventListener('click', function(){ runFormatExport(this, exportAsDoc); });
 
   async function collectAllTasks(){
     const rows = [];
@@ -2944,23 +3091,38 @@
     return String(str).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   }
 
-  async function runExport(){
+  // Reads the *live* values of the currently active theme (default preset,
+  // another preset, or Custom — doesn't matter which) directly off :root,
+  // so the export always matches whatever the user is actually looking at
+  // right now instead of a hardcoded palette.
+  function currentThemeVarsForExport(){
+    const cs = getComputedStyle(document.documentElement);
+    const keys = ['--bg','--surface','--surface-2','--border','--text','--text-dim','--accent','--accent-2'];
+    const out = {};
+    keys.forEach(k => { const v = cs.getPropertyValue(k).trim(); out[k] = v || BASE_VARS[k]; });
+    return out;
+  }
+
+  async function buildReportData(){
     const rows = await collectAllTasks();
     rows.sort((a,b) => (a.date+((a.time)||'99:99')).localeCompare(b.date+((b.time)||'99:99')));
-
     const totalDone = rows.filter(r => r.done).length;
     const completionPct = rows.length ? Math.round(totalDone / rows.length * 100) : 0;
-
     const byDate = {};
     rows.forEach(r => { (byDate[r.date] = byDate[r.date] || []).push(r); });
     const dateKeys = Object.keys(byDate).sort();
+    return { rows, totalDone, completionPct, byDate, dateKeys };
+  }
 
-    function fmtLongDate(dateKey){
-      const [y,m,d] = dateKey.split('-').map(Number);
-      const dt = new Date(y, m-1, d);
-      return dt.toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric', year:'numeric' });
-    }
+  function fmtLongDate(dateKey){
+    const [y,m,d] = dateKey.split('-').map(Number);
+    const dt = new Date(y, m-1, d);
+    return dt.toLocaleDateString(undefined, { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+  }
 
+  // The report's inner markup — shared verbatim across HTML/PDF/DOC exports
+  // so all three formats always show the exact same data and structure.
+  function buildReportBody({ rows, totalDone, completionPct, byDate, dateKeys }){
     const sections = dateKeys.map(dateKey => {
       const items = byDate[dateKey];
       const doneCount = items.filter(t=>t.done).length;
@@ -2983,13 +3145,26 @@
       </section>`;
     }).join('');
 
-    const html = `<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>To-Do Tracker Export</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root{ --bg:#0E1013; --surface:#181B22; --surface-2:#21252E; --border:rgba(255,255,255,0.08); --text:#F4F5F7; --text-dim:#8A8FA0; --accent:#7C6BF0; --accent-2:#2FD9A8; }
+    return `<div class="wrap">
+  <div class="brand">
+    <svg width="30" height="30" viewBox="0 0 512 512"><rect width="512" height="512" rx="104" fill="#0E1013"/><circle cx="256" cy="256" r="178" fill="none" stroke="#7C6BF0" stroke-width="30"/><path d="M164 268 L228 332 L356 188" fill="none" stroke="#F4F5F7" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div>
+      <h1>To-Do Tracker Export</h1>
+      <div class="sub" style="margin:0;">generated ${new Date().toLocaleString()}</div>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat-card"><div class="stat-num">${rows.length}</div><div class="stat-label">Total tasks</div></div>
+    <div class="stat-card"><div class="stat-num accent">${totalDone}</div><div class="stat-label">Completed</div></div>
+    <div class="stat-card"><div class="stat-num accent">${completionPct}%</div><div class="stat-label">Completion rate</div></div>
+  </div>
+  ${sections || '<div class="empty">No tasks logged yet.</div>'}
+</div>`;
+  }
+
+  function buildReportStyleForScreen(vars){
+    return `<style>
+  :root{ --bg:${vars['--bg']}; --surface:${vars['--surface']}; --surface-2:${vars['--surface-2']}; --border:${vars['--border']}; --text:${vars['--text']}; --text-dim:${vars['--text-dim']}; --accent:${vars['--accent']}; --accent-2:${vars['--accent-2']}; }
   *{ box-sizing:border-box; -webkit-text-size-adjust:100%; }
   body{ margin:0; background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; padding:28px 16px 60px; }
   .wrap{ max-width: 760px; margin: 0 auto; }
@@ -3024,23 +3199,19 @@
     body{ background:#fff; color:#111; }
     .stat-card, table{ -webkit-print-color-adjust:exact; print-color-adjust:exact; border-color:#ddd; }
   }
-</style></head>
-<body><div class="wrap">
-  <div class="brand">
-    <svg width="30" height="30" viewBox="0 0 512 512"><rect width="512" height="512" rx="104" fill="#0E1013"/><circle cx="256" cy="256" r="178" fill="none" stroke="#7C6BF0" stroke-width="30"/><path d="M164 268 L228 332 L356 188" fill="none" stroke="#F4F5F7" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <div>
-      <h1>To-Do Tracker Export</h1>
-      <div class="sub" style="margin:0;">generated ${new Date().toLocaleString()}</div>
-    </div>
-  </div>
-  <div class="stats">
-    <div class="stat-card"><div class="stat-num">${rows.length}</div><div class="stat-label">Total tasks</div></div>
-    <div class="stat-card"><div class="stat-num accent">${totalDone}</div><div class="stat-label">Completed</div></div>
-    <div class="stat-card"><div class="stat-num accent">${completionPct}%</div><div class="stat-label">Completion rate</div></div>
-  </div>
-  ${sections || '<div class="empty">No tasks logged yet.</div>'}
-</div></body></html>`;
+</style>`;
+  }
 
+  async function exportAsHtml(){
+    const data = await buildReportData();
+    const vars = currentThemeVarsForExport();
+    const html = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>To-Do Tracker Export</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+${buildReportStyleForScreen(vars)}</head>
+<body>${buildReportBody(data)}</body></html>`;
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const filename = `tdtracker-${fmtKey(new Date())}.html`;
@@ -3051,6 +3222,117 @@
     a.click();
     a.remove();
     showExportReady(url, filename);
+  }
+
+  // Word can't render CSS custom properties, flexbox, or border-radius
+  // reliably, so DOC gets its own simplified, table-safe stylesheet with
+  // colors resolved to literal hex values rather than reusing the screen
+  // stylesheet verbatim — this keeps the same data and structure, just
+  // rendered in a way Word's HTML engine actually understands.
+  function buildReportStyleForWord(vars){
+    return `<style>
+  body{ font-family:Calibri,Arial,sans-serif; color:#111; }
+  .wrap{ max-width: 760px; }
+  h1{ font-size:20pt; margin:0 0 2pt; color:${vars['--text']}; }
+  .sub{ font-size:9pt; color:#666; margin-bottom:16pt; }
+  .stats{ margin-bottom:16pt; }
+  .stat-card{ display:inline-block; border:1pt solid #ccc; padding:8pt 12pt; margin-right:8pt; }
+  .stat-num{ font-size:16pt; font-weight:bold; }
+  .stat-num.accent{ color:${vars['--accent']}; }
+  .stat-label{ font-size:9pt; color:#666; }
+  .day{ margin-bottom:16pt; }
+  .day-head{ font-size:13pt; font-weight:bold; margin-bottom:4pt; }
+  .day-count{ font-size:9pt; color:#666; font-weight:normal; }
+  table{ border-collapse:collapse; width:100%; }
+  th, td{ border:1pt solid #ccc; padding:6pt 8pt; font-size:10.5pt; text-align:left; }
+  th{ background:#f2f2f2; }
+  .pill{ padding:2pt 6pt; border-radius:8pt; background:#eee; font-size:9pt; }
+  .pill.done{ background:#d7f5e9; }
+  .empty{ color:#666; }
+</style>`;
+  }
+
+  async function exportAsDoc(){
+    const data = await buildReportData();
+    const vars = currentThemeVarsForExport();
+    // The classic Word-compatible trick: MS Office namespaces + a .doc
+    // extension on plain HTML — Word opens this directly, no real backend
+    // .doc generation needed.
+    const docHtml = `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head><meta charset='utf-8'><title>To-Do Tracker Export</title>${buildReportStyleForWord(vars)}</head>
+<body>${buildReportBody(data).replace(/day-head">\s*<h2>/g, 'day-head"><span>').replace(/<\/h2>/g, '</span>')}</body></html>`;
+    const blob = new Blob(['\ufeff', docHtml], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const filename = `tdtracker-${fmtKey(new Date())}.doc`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showExportReady(url, filename);
+  }
+
+  function loadScriptOnce(src, checkLoaded){
+    if(checkLoaded()) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const existing = document.querySelector(`script[data-src="${src}"]`);
+      if(existing){
+        existing.addEventListener('load', resolve);
+        existing.addEventListener('error', () => reject(new Error('load failed')));
+        return;
+      }
+      const s = document.createElement('script');
+      s.src = src;
+      s.dataset.src = src;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('load failed'));
+      document.head.appendChild(s);
+    });
+  }
+
+  async function exportAsPdf(){
+    try{
+      toast('preparing PDF…');
+      await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', () => !!window.html2canvas);
+      await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', () => !!(window.jspdf && window.jspdf.jsPDF));
+      const data = await buildReportData();
+      const vars = currentThemeVarsForExport();
+
+      // Render into an offscreen container so html2canvas has real, laid-out
+      // DOM to rasterize — same body markup as the HTML export, same theme.
+      const container = document.createElement('div');
+      container.style.position = 'fixed';
+      container.style.left = '-10000px';
+      container.style.top = '0';
+      container.style.width = '760px';
+      container.innerHTML = buildReportStyleForScreen(vars) + buildReportBody(data);
+      document.body.appendChild(container);
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+      await new Promise((resolve, reject) => {
+        pdf.html(container, {
+          margin: [24, 24, 24, 24],
+          autoPaging: 'text',
+          html2canvas: { scale: 0.75, backgroundColor: vars['--bg'] },
+          callback: (doc) => {
+            try{
+              doc.save(`tdtracker-${fmtKey(new Date())}.pdf`);
+              resolve();
+            }catch(e){ reject(e); }
+          }
+        });
+      });
+      container.remove();
+      toast('PDF downloaded');
+    }catch(e){
+      toast('PDF export failed — check your connection');
+    }
+  }
+
+  async function runExport(){
+    await exportAsHtml();
   }
 
   /* ---------- Export-ready notification ---------- */
