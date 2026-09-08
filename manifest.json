@@ -1,7 +1,7 @@
 {
   "name": "To-Do Tracker",
   "short_name": "To-Do Tracker",
-  "version": "2.6.0.0",
+  "version": "2.7.0.0",
   "description": "A modern tracker for daily to-dos.",
   "start_url": "./index.html",
   "scope": "./",
