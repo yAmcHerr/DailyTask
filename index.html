@@ -902,6 +902,31 @@
   .time-picker-actions button.primary{ background: var(--accent); color: #fff; border-color: transparent; }
   .time-picker-actions button:active{ transform: scale(0.97); }
 
+  .import-textarea{
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 160px;
+    resize: vertical;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 13px;
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.55;
+  }
+  .import-textarea::placeholder{ color: var(--text-faint); line-height: 1.6; }
+  .import-progress{
+    font-size: 12px;
+    color: var(--text-dim);
+    background: var(--surface-2);
+    border-radius: 10px;
+    padding: 9px 12px;
+    margin-bottom: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
   .cal-card{
     max-width: 560px;
     max-height: 92vh;
@@ -1243,11 +1268,45 @@
           <span class="menu-item-label">Export tasks</span>
           <span class="menu-item-chevron">›</span>
         </button>
+        <button class="menu-item" id="importBtn">
+          <span class="menu-item-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 10.5V2.5m0 0L5 5.5m3-3l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12.5v1a1 1 0 001 1h8a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span>
+          <span class="menu-item-label">Import tasks</span>
+          <span class="menu-item-chevron">›</span>
+        </button>
         <button class="menu-item" id="aboutBtn">
           <span class="menu-item-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.8" stroke="currentColor" stroke-width="1.3"/><path d="M8 7.2v3.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><circle cx="8" cy="5.1" r="0.9" fill="currentColor"/></svg></span>
           <span class="menu-item-label">About</span>
           <span class="menu-item-chevron">›</span>
         </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="importBackdrop">
+    <div class="modal-card modal-card-tall">
+      <button class="modal-close" id="importClose" aria-label="Close">✕</button>
+      <div class="modal-title">Import tasks</div>
+      <div class="modal-sub">Pick a source, review what was found below, edit anything that looks wrong, then confirm.</div>
+      <div class="format-list" style="margin-bottom:14px;">
+        <button type="button" class="format-option" id="importFileBtn">
+          <span class="format-option-icon"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 2h7l3 3v11a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M11 2v3h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></span>
+          <span class="format-option-body"><span class="format-option-title">From a file</span><span class="format-option-sub">.txt, .csv, or a To-Do Tracker .html export</span></span>
+        </button>
+        <button type="button" class="format-option" id="importImageBtn">
+          <span class="format-option-icon"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="3.5" width="14" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="6.5" cy="7.5" r="1.3" stroke="currentColor" stroke-width="1.2"/><path d="M2.5 12.5l4-3.5 3 2.5 2.5-2 3.5 3" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></span>
+          <span class="format-option-body"><span class="format-option-title">From a photo</span><span class="format-option-sub">Scans a picture of a written list (best-effort — always double-check)</span></span>
+        </button>
+      </div>
+      <input type="file" id="importFileInput" accept=".txt,.csv,.html,.htm,text/plain,text/csv,text/html" style="display:none;">
+      <input type="file" id="importImageInput" accept="image/*" style="display:none;">
+      <div class="import-progress" id="importProgress" style="display:none;"></div>
+      <textarea id="importTextarea" class="import-textarea" placeholder="Nothing loaded yet — pick a file or photo above, or just type/paste tasks here.
+
+One task per line. Optional time prefix like &quot;09:00 Buy milk&quot;. Add &quot;[x]&quot; at the end of a line to mark it already done.
+Start a line with &quot;# 2026-01-05&quot; to switch which day the tasks below it go to — everything before the first # line goes to today."></textarea>
+      <div class="time-picker-actions" style="margin-top:14px;">
+        <button type="button" id="importCancelBtn">Cancel</button>
+        <button type="button" id="importConfirmBtn" class="primary">Import tasks</button>
       </div>
     </div>
   </div>
@@ -2992,7 +3051,7 @@
   // "version" field — sw.js reads the same field to name its cache, so the
   // two never need to be updated in two places by hand. This constant is
   // just the fallback shown if that fetch hasn't resolved yet (or fails).
-  let APP_VERSION = '2.6.0.0';
+  let APP_VERSION = '2.7.0.0';
   fetch('./manifest.json').then(r => r.json()).then(data => {
     if(data.version) APP_VERSION = data.version;
   }).catch(()=>{});
@@ -3133,7 +3192,7 @@
           <td>${r.done ? '<span class="pill done">Done</span>' : '<span class="pill">Open</span>'}</td>
         </tr>`).join('');
       return `
-      <section class="day">
+      <section class="day" data-date="${dateKey}">
         <div class="day-head">
           <h2>${escapeHtml(fmtLongDate(dateKey))}</h2>
           <span class="day-count">${doneCount}/${items.length} done</span>
@@ -3334,6 +3393,239 @@ ${buildReportStyleForScreen(vars)}</head>
   async function runExport(){
     await exportAsHtml();
   }
+
+  /* ---------- Import ---------- */
+  const importBtn = document.getElementById('importBtn');
+  const importBackdrop = document.getElementById('importBackdrop');
+  const importTextarea = document.getElementById('importTextarea');
+  const importProgress = document.getElementById('importProgress');
+  const importFileInput = document.getElementById('importFileInput');
+  const importImageInput = document.getElementById('importImageInput');
+  const importConfirmBtn = document.getElementById('importConfirmBtn');
+
+  function resetImportModal(){
+    importTextarea.value = '';
+    importProgress.style.display = 'none';
+    importProgress.textContent = '';
+    importFileInput.value = '';
+    importImageInput.value = '';
+  }
+  function closeImportModal(){
+    importBackdrop.classList.remove('show');
+    resetImportModal();
+  }
+  importBtn.addEventListener('click', () => { closeMenu(); resetImportModal(); importBackdrop.classList.add('show'); });
+  document.getElementById('importClose').addEventListener('click', closeImportModal);
+  document.getElementById('importCancelBtn').addEventListener('click', closeImportModal);
+  importBackdrop.addEventListener('click', (e) => { if(e.target === importBackdrop) closeImportModal(); });
+  document.getElementById('importFileBtn').addEventListener('click', () => importFileInput.click());
+  document.getElementById('importImageBtn').addEventListener('click', () => importImageInput.click());
+
+  // Every source (txt/csv/html/OCR) converges on this one plain-text format
+  // in the textarea, so the user always gets a single, editable review step
+  // before anything is actually saved — important especially for OCR, which
+  // will sometimes misread words or whole lines.
+  //   # 2026-01-05          <- a date header; everything below it goes to that day
+  //   09:00 Buy milk        <- optional "HH:MM " time prefix
+  //   Call the dentist      <- no prefix = no time
+  // Lines before the first "# date" header default to today.
+  function parseImportText(text){
+    const lines = text.split(/\r?\n/);
+    const dateHeaderRe = /^#\s*(\d{4}-\d{2}-\d{2})\s*$/;
+    const timePrefixRe = /^([01]?\d|2[0-3]):([0-5]\d)\s+(.+)$/;
+    const doneMarkerRe = /\s*\[(x|done)\]\s*$/i;
+    const grouped = {};
+    let currentDateKey = fmtKey(new Date());
+    lines.forEach(line => {
+      let trimmed = line.trim();
+      if(!trimmed) return;
+      const headerMatch = trimmed.match(dateHeaderRe);
+      if(headerMatch){ currentDateKey = headerMatch[1]; return; }
+      let done = false;
+      if(doneMarkerRe.test(trimmed)){
+        done = true;
+        trimmed = trimmed.replace(doneMarkerRe, '').trim();
+      }
+      const timeMatch = trimmed.match(timePrefixRe);
+      let time = '', taskText = trimmed;
+      if(timeMatch){
+        time = `${timeMatch[1].padStart(2,'0')}:${timeMatch[2]}`;
+        taskText = timeMatch[3].trim();
+      }
+      if(!taskText) return;
+      (grouped[currentDateKey] = grouped[currentDateKey] || []).push({ time, text: taskText, done });
+    });
+    return grouped;
+  }
+  function groupedToImportText(grouped){
+    return Object.keys(grouped).sort().map(dateKey => {
+      const lines = grouped[dateKey].map(t => (t.time ? `${t.time} ` : '') + t.text + (t.done ? ' [x]' : ''));
+      return `# ${dateKey}\n` + lines.join('\n');
+    }).join('\n\n');
+  }
+
+  function splitCsvLine(line){
+    const out = []; let cur = ''; let inQuotes = false;
+    for(let i=0;i<line.length;i++){
+      const c = line[i];
+      if(c === '"'){ inQuotes = !inQuotes; continue; }
+      if(c === ',' && !inQuotes){ out.push(cur); cur = ''; continue; }
+      cur += c;
+    }
+    out.push(cur);
+    return out.map(s => s.trim());
+  }
+  function parseCsvToGrouped(text){
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if(!lines.length) return {};
+    const rows = lines.map(splitCsvLine);
+    const header = rows[0].map(h => h.toLowerCase());
+    const looksLikeHeader = header.some(h => ['date','task','time','done','text','status'].includes(h));
+    let colDate = 0, colTime = -1, colTask = looksLikeHeader ? -1 : 0, colDone = -1, startIdx = 0;
+    if(looksLikeHeader){
+      colDate = header.indexOf('date');
+      colTime = header.indexOf('time');
+      colTask = header.findIndex(h => h === 'task' || h === 'text');
+      colDone = header.findIndex(h => h === 'done' || h === 'status');
+      startIdx = 1;
+    }
+    if(colTask < 0) colTask = looksLikeHeader ? header.length - 1 : 0;
+    const grouped = {};
+    const todayKey = fmtKey(new Date());
+    for(let i = startIdx; i < rows.length; i++){
+      const row = rows[i];
+      const rawDate = colDate >= 0 ? (row[colDate] || '') : '';
+      let dateKey = todayKey;
+      if(rawDate){
+        if(/^\d{4}-\d{2}-\d{2}$/.test(rawDate)){
+          dateKey = rawDate;
+        } else {
+          const parsed = new Date(rawDate);
+          if(!isNaN(parsed)) dateKey = fmtKey(parsed);
+        }
+      }
+      const time = colTime >= 0 ? (row[colTime] || '').trim() : '';
+      const taskText = (row[colTask] || '').trim();
+      if(!taskText) continue;
+      const doneRaw = colDone >= 0 ? (row[colDone] || '').trim().toLowerCase() : '';
+      const done = ['true','yes','done','1','x'].includes(doneRaw);
+      (grouped[dateKey] = grouped[dateKey] || []).push({ time: /^\d{2}:\d{2}$/.test(time) ? time : '', text: taskText, done });
+    }
+    return grouped;
+  }
+
+  // Parses a file previously produced by this app's own HTML export. Freshly
+  // exported files carry a data-date attribute for exact round-tripping;
+  // older exports (before that attribute existed) fall back to a best-effort
+  // parse of the visible date heading, and are skipped rather than guessed
+  // at if that fails — better to silently drop an unrecoverable section than
+  // silently misfile it onto the wrong day.
+  function parseOwnHtmlExport(htmlText){
+    const grouped = {};
+    try{
+      const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+      doc.querySelectorAll('section.day').forEach(sec => {
+        let dateKey = sec.getAttribute('data-date');
+        if(!dateKey){
+          const h2 = sec.querySelector('h2');
+          if(h2){
+            const parsed = new Date(h2.textContent);
+            if(!isNaN(parsed)) dateKey = fmtKey(parsed);
+          }
+        }
+        if(!dateKey) return;
+        sec.querySelectorAll('tbody tr').forEach(tr => {
+          const cells = tr.querySelectorAll('td');
+          if(cells.length < 2) return;
+          const timeRaw = cells[0].textContent.trim();
+          const text = cells[1].textContent.trim();
+          if(!text) return;
+          const done = cells.length > 2 && /done/i.test(cells[2].textContent);
+          (grouped[dateKey] = grouped[dateKey] || []).push({ time: /^\d{2}:\d{2}$/.test(timeRaw) ? timeRaw : '', text, done });
+        });
+      });
+    }catch(e){ /* malformed file — importTextarea just ends up empty, user can type instead */ }
+    return grouped;
+  }
+
+  importFileInput.addEventListener('change', async () => {
+    const file = importFileInput.files[0];
+    if(!file) return;
+    try{
+      const text = await file.text();
+      const name = file.name.toLowerCase();
+      const looksLikeHtml = /^\s*<(!DOCTYPE|html)/i.test(text) || text.includes('class="day" data-date=');
+      if(name.endsWith('.csv') && !looksLikeHtml){
+        importTextarea.value = groupedToImportText(parseCsvToGrouped(text));
+      } else if(looksLikeHtml || name.endsWith('.html') || name.endsWith('.htm')){
+        importTextarea.value = groupedToImportText(parseOwnHtmlExport(text));
+      } else {
+        // .txt (or anything else): already close enough to the textarea's own
+        // format — one task per line, optional "HH:MM " prefix — so just load
+        // it in directly rather than trying to reinterpret it.
+        importTextarea.value = text;
+      }
+    }catch(e){
+      toast('could not read that file');
+    }finally{
+      importFileInput.value = '';
+    }
+  });
+
+  importImageInput.addEventListener('change', async () => {
+    const file = importImageInput.files[0];
+    if(!file) return;
+    importProgress.style.display = 'block';
+    importProgress.textContent = 'Loading OCR engine…';
+    try{
+      await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js', () => !!window.Tesseract);
+      const result = await window.Tesseract.recognize(file, 'eng', {
+        logger: m => {
+          if(m.status === 'recognizing text'){
+            importProgress.textContent = `Reading image… ${Math.round((m.progress || 0) * 100)}%`;
+          } else if(m.status){
+            importProgress.textContent = m.status;
+          }
+        }
+      });
+      const rawText = (result && result.data && result.data.text) || '';
+      const cleaned = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean).join('\n');
+      importTextarea.value = cleaned;
+      importProgress.textContent = cleaned
+        ? 'Done — OCR can misread words, double-check the text below before importing.'
+        : 'No text found in that image — try a clearer photo, or type tasks directly below.';
+    }catch(e){
+      importProgress.textContent = 'Could not read that image — check your connection, or type tasks directly below.';
+    }finally{
+      importImageInput.value = '';
+    }
+  });
+
+  importConfirmBtn.addEventListener('click', async () => {
+    const grouped = parseImportText(importTextarea.value);
+    const dateKeys = Object.keys(grouped);
+    if(!dateKeys.length){
+      toast('nothing to import');
+      return;
+    }
+    importConfirmBtn.disabled = true;
+    try{
+      let totalImported = 0;
+      for(const dateKey of dateKeys){
+        const [y, m, d] = dateKey.split('-').map(Number);
+        const dateObj = new Date(y, m - 1, d);
+        const existing = await loadTasks(dateObj, { silent: true });
+        const newTasks = grouped[dateKey].map(t => ({ id: uid(), text: t.text, time: t.time || '', done: !!t.done }));
+        await saveTasks(dateObj, [...existing, ...newTasks], { silent: true });
+        totalImported += newTasks.length;
+      }
+      closeImportModal();
+      toast(`imported ${totalImported} task${totalImported === 1 ? '' : 's'} across ${dateKeys.length} day${dateKeys.length === 1 ? '' : 's'}`);
+      if(dateKeys.includes(fmtKey(current))) refresh();
+    } finally {
+      importConfirmBtn.disabled = false;
+    }
+  });
 
   /* ---------- Export-ready notification ---------- */
   const exportToast = document.getElementById('exportToast');
