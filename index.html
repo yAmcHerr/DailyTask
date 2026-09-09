@@ -917,15 +917,6 @@
     line-height: 1.55;
   }
   .import-textarea::placeholder{ color: var(--text-faint); line-height: 1.6; }
-  .import-progress{
-    font-size: 12px;
-    color: var(--text-dim);
-    background: var(--surface-2);
-    border-radius: 10px;
-    padding: 9px 12px;
-    margin-bottom: 10px;
-    font-family: 'IBM Plex Mono', monospace;
-  }
 
   .cal-card{
     max-width: 560px;
@@ -1289,7 +1280,7 @@
         </button>
         <button type="button" class="format-option" id="backupImportBtn">
           <span class="format-option-icon"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 12.5v-8m0 0L6 7.5m3-3l3 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.5 13v1.5a1 1 0 001 1h9a1 1 0 001-1V13" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg></span>
-          <span class="format-option-body"><span class="format-option-title">Import</span><span class="format-option-sub">From a file, or scan a photo of a list</span></span>
+          <span class="format-option-body"><span class="format-option-title">Import</span><span class="format-option-sub">From a .txt, .csv, or exported .html file</span></span>
         </button>
       </div>
     </div>
@@ -1299,21 +1290,15 @@
     <div class="modal-card modal-card-tall">
       <button class="modal-close" id="importClose" aria-label="Close">✕</button>
       <div class="modal-title">Import tasks</div>
-      <div class="modal-sub">Pick a source, review what was found below, edit anything that looks wrong, then confirm.</div>
+      <div class="modal-sub">Pick a file, review what was found below, edit anything that looks wrong, then confirm.</div>
       <div class="format-list" style="margin-bottom:14px;">
         <button type="button" class="format-option" id="importFileBtn">
           <span class="format-option-icon"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 2h7l3 3v11a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><path d="M11 2v3h3" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></span>
           <span class="format-option-body"><span class="format-option-title">From a file</span><span class="format-option-sub">.txt, .csv, or a To-Do Tracker .html export</span></span>
         </button>
-        <button type="button" class="format-option" id="importImageBtn">
-          <span class="format-option-icon"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="2" y="3.5" width="14" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><circle cx="6.5" cy="7.5" r="1.3" stroke="currentColor" stroke-width="1.2"/><path d="M2.5 12.5l4-3.5 3 2.5 2.5-2 3.5 3" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></span>
-          <span class="format-option-body"><span class="format-option-title">From a photo</span><span class="format-option-sub">Scans a picture of a written list (best-effort — always double-check)</span></span>
-        </button>
       </div>
       <input type="file" id="importFileInput" accept=".txt,.csv,.html,.htm,text/plain,text/csv,text/html" style="display:none;">
-      <input type="file" id="importImageInput" accept="image/*" style="display:none;">
-      <div class="import-progress" id="importProgress" style="display:none;"></div>
-      <textarea id="importTextarea" class="import-textarea" placeholder="Nothing loaded yet — pick a file or photo above, or just type/paste tasks here.
+      <textarea id="importTextarea" class="import-textarea" placeholder="Nothing loaded yet — pick a file above, or just type/paste tasks here.
 
 One task per line. Optional time prefix like &quot;09:00 Buy milk&quot;. Add &quot;[x]&quot; at the end of a line to mark it already done.
 Start a line with &quot;# 2026-01-05&quot; to switch which day the tasks below it go to — everything before the first # line goes to today."></textarea>
@@ -3064,7 +3049,7 @@ Start a line with &quot;# 2026-01-05&quot; to switch which day the tasks below i
   // "version" field — sw.js reads the same field to name its cache, so the
   // two never need to be updated in two places by hand. This constant is
   // just the fallback shown if that fetch hasn't resolved yet (or fails).
-  let APP_VERSION = '2.7.1.0';
+  let APP_VERSION = '2.7.2.0';
   fetch('./manifest.json').then(r => r.json()).then(data => {
     if(data.version) APP_VERSION = data.version;
   }).catch(()=>{});
@@ -3420,17 +3405,12 @@ ${buildReportStyleForScreen(vars)}</head>
   /* ---------- Import ---------- */
   const importBackdrop = document.getElementById('importBackdrop');
   const importTextarea = document.getElementById('importTextarea');
-  const importProgress = document.getElementById('importProgress');
   const importFileInput = document.getElementById('importFileInput');
-  const importImageInput = document.getElementById('importImageInput');
   const importConfirmBtn = document.getElementById('importConfirmBtn');
 
   function resetImportModal(){
     importTextarea.value = '';
-    importProgress.style.display = 'none';
-    importProgress.textContent = '';
     importFileInput.value = '';
-    importImageInput.value = '';
   }
   function closeImportModal(){
     importBackdrop.classList.remove('show');
@@ -3440,9 +3420,8 @@ ${buildReportStyleForScreen(vars)}</head>
   document.getElementById('importCancelBtn').addEventListener('click', closeImportModal);
   importBackdrop.addEventListener('click', (e) => { if(e.target === importBackdrop) closeImportModal(); });
   document.getElementById('importFileBtn').addEventListener('click', () => importFileInput.click());
-  document.getElementById('importImageBtn').addEventListener('click', () => importImageInput.click());
 
-  // Every source (txt/csv/html/OCR) converges on this one plain-text format
+  // Every source (txt/csv/html) converges on this one plain-text format
   // in the textarea, so the user always gets a single, editable review step
   // before anything is actually saved — important especially for OCR, which
   // will sometimes misread words or whole lines.
@@ -3590,35 +3569,6 @@ ${buildReportStyleForScreen(vars)}</head>
       toast('could not read that file');
     }finally{
       importFileInput.value = '';
-    }
-  });
-
-  importImageInput.addEventListener('change', async () => {
-    const file = importImageInput.files[0];
-    if(!file) return;
-    importProgress.style.display = 'block';
-    importProgress.textContent = 'Loading OCR engine…';
-    try{
-      await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js', () => !!window.Tesseract);
-      const result = await window.Tesseract.recognize(file, 'eng', {
-        logger: m => {
-          if(m.status === 'recognizing text'){
-            importProgress.textContent = `Reading image… ${Math.round((m.progress || 0) * 100)}%`;
-          } else if(m.status){
-            importProgress.textContent = m.status;
-          }
-        }
-      });
-      const rawText = (result && result.data && result.data.text) || '';
-      const cleaned = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean).join('\n');
-      importTextarea.value = cleaned;
-      importProgress.textContent = cleaned
-        ? 'Done — OCR can misread words, double-check the text below before importing.'
-        : 'No text found in that image — try a clearer photo, or type tasks directly below.';
-    }catch(e){
-      importProgress.textContent = 'Could not read that image — check your connection, or type tasks directly below.';
-    }finally{
-      importImageInput.value = '';
     }
   });
 
